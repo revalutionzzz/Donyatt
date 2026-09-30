@@ -21,3 +21,7 @@ migrations_dir = "migrations"
 [[kv_namespaces]]
 binding = "STATUS"
 id = "683fae22ded14b73ad42acf6cbfacab1"
+
+# Static page (public/index.html). Files are served directly; other paths (/api/status, /health) reach the Worker.
+[assets]
+directory = "./public"

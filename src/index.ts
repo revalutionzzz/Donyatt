@@ -1,21 +1,16 @@
 import { runCollector } from "./collector";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
+import { getStatus, refreshStatus, runCollectorIfStale, STALE_RUN_MS } from "./statusService";
 
 export interface Env {
   DB: D1Database;
   STATUS: KVNamespace;
 }
 
-/** If the cron hasn't produced a run for this long, /health runs the collector itself. */
-const STALE_RUN_MS = 20 * 60 * 1000;
-/** At most one /health-triggered run per isolate per minute, so repeated reloads can't hammer the EA API. */
-const FALLBACK_THROTTLE_MS = 60 * 1000;
-let lastFallbackAt = 0;
-
-const json = (body: unknown, status = 200) =>
+const json = (body: unknown, status = 200, cacheControl = "no-store") =>
   new Response(JSON.stringify(body, null, 2), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": cacheControl },
   });
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -46,40 +41,52 @@ export async function health(env: Env, now = Date.now(), fetchFn: typeof fetch =
     return json({ error: `Database query failed: ${errorMessage(err)}` }, 500);
   }
 
-  const lastRunAge = data.lastRun ? now - Date.parse(data.lastRun.started_at) : Infinity;
-  if (lastRunAge < STALE_RUN_MS || now - lastFallbackAt < FALLBACK_THROTTLE_MS) {
-    return json({ ...data, cronLooksHealthy: lastRunAge < STALE_RUN_MS });
-  }
+  const outcome = await runCollectorIfStale(env.DB, now, fetchFn);
+  const cronLooksHealthy = outcome.lastRunAgeMs < STALE_RUN_MS;
+  if (!outcome.ran) return json({ ...data, cronLooksHealthy });
 
-  lastFallbackAt = now;
-  let fallbackRun;
-  try {
-    fallbackRun = await runCollector(env.DB, new Date(now), fetchFn);
-  } catch (err) {
-    fallbackRun = { error: errorMessage(err) };
-  }
+  if (env.STATUS) await refreshStatus(env.DB, env.STATUS, new Date(now)).catch(() => undefined);
   return json({
     ...(await snapshot(env.DB).catch(() => data)),
-    cronLooksHealthy: false,
+    cronLooksHealthy,
     note: "No collector run in the last 20 minutes, so this request ran it.",
-    fallbackRun,
+    fallbackRun: outcome.error ? { error: outcome.error } : outcome.result,
   });
+}
+
+export async function apiStatus(env: Env, now = Date.now(), fetchFn: typeof fetch = fetch): Promise<Response> {
+  try {
+    return json(await getStatus(env.DB, env.STATUS, now, fetchFn), 200, "public, max-age=60");
+  } catch (err) {
+    console.error("Status failed:", errorMessage(err));
+    return json({ error: "Status is unavailable right now. Never drive into floodwater." }, 503);
+  }
 }
 
 export default {
   async fetch(request, env): Promise<Response> {
     const { pathname } = new URL(request.url);
+    if (request.method === "GET" && pathname === "/api/status") return apiStatus(env);
     if (request.method === "GET" && pathname === "/health") return health(env);
-    return json({ error: "Not found. Try /health" }, 404);
+    return json({ error: "Not found" }, 404);
   },
 
   async scheduled(controller, env, ctx): Promise<void> {
     console.log(`Cron ${controller.cron} fired at ${new Date(controller.scheduledTime).toISOString()}`);
     ctx.waitUntil(
-      runCollector(env.DB).then(
-        (r) => console.log("Collector run", JSON.stringify(r)),
-        (err) => console.error("Collector run failed:", errorMessage(err)),
-      ),
+      (async () => {
+        try {
+          console.log("Collector run", JSON.stringify(await runCollector(env.DB)));
+        } catch (err) {
+          console.error("Collector run failed:", errorMessage(err));
+        }
+        // Refresh the status even if collection failed, so stale data is reported as such.
+        try {
+          await refreshStatus(env.DB, env.STATUS);
+        } catch (err) {
+          console.error("Status refresh failed:", errorMessage(err));
+        }
+      })(),
     );
   },
 } satisfies ExportedHandler<Env>;
