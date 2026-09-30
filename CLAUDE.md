@@ -24,12 +24,19 @@ The tool combines Environment Agency (EA) river/rain data, a flood-likelihood pr
 
 ### Confirmed IDs
 
-_Not yet confirmed. Fill this in (with the date and the API URL used) once they have been checked against a live API response._
+Checked against the live EA APIs on 2026-09-30.
 
-| What | Station reference | Measure ID | Confirmed on |
+| What | Flood-monitoring station | Live measure (flood-monitoring API) | Hydrology API station (for backfill) |
 |---|---|---|---|
-| Donyatt river level | TBC | TBC | — |
-| Chard Snowden Hill rainfall | TBC | TBC | — |
+| Donyatt river level (River Isle) | `52115` (RLOI `3076`, WISKI `520190_FW`) | `52115-level-stage-i-15_min-mASD` | `6d2349f9-d71e-45a9-ba86-0bafdab39c35`, measure `…-level-i-900-m-qualified` |
+| Chard Snowden Hill rainfall | `52129` (ST310089) | `52129-rainfall-tipping_bucket_raingauge-t-15_min-mm` | `d1803c5a-e461-404b-8750-7f946456a6c6`, measures `…-rainfall-t-900-mm-qualified` (15 min), `…-rainfall-t-86400-mm-qualified` (daily) |
+| Flood warning area | `112FWFISL10A` | Active warnings: `/id/floods` filtered on `floodAreaID` | — |
+
+Notes:
+
+- **Use the `mASD` Donyatt measure.** The station also lists `52115-level-stage-i-15_min-m`, but that one stopped updating on 2026-06-16. `mASD` (metres above stage datum) is on the same scale as the thresholds below: the stage scale (`/id/stations/52115/stageScale`) gives the typical range as 0.124–1.2 m, the max on record as 2.632 m (2000-12-31) and the highest recent as 2.42 m (2013-12-24). If readings stop, check the station's `measures` list again rather than assuming the ID is permanent.
+- The flood-monitoring API labels rain gauges only as "Rainfall station". The name comes from the hydrology API, which labels `52129` as "Chards Snowdon Hill" (spelled *Snowdon*), open since 2017-03-29. Rainfall history before 2017 needs a different gauge.
+- The flood area's official label is "River Isle from Chard Reservoir to Hambridge not including Ilminster".
 
 ## Known Donyatt gauge thresholds (from the EA)
 
