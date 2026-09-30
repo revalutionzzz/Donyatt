@@ -1,0 +1,81 @@
+{
+  "_note": "SYNTHETIC fixture: structure copied from a real /id/floods response (floods-none-local.json); values invented to test the active-warning path.",
+  "meta": {
+    "publisher": "Environment Agency",
+    "licence": "http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+    "documentation": "http://environment.data.gov.uk/flood-monitoring/doc/reference",
+    "version": "0.9",
+    "comment": "Status: Beta service",
+    "hasFormat": [
+      "http://environment.data.gov.uk/flood-monitoring/id/floods.csv",
+      "http://environment.data.gov.uk/flood-monitoring/id/floods.rdf",
+      "http://environment.data.gov.uk/flood-monitoring/id/floods.ttl",
+      "http://environment.data.gov.uk/flood-monitoring/id/floods.html"
+    ]
+  },
+  "items": [
+    {
+      "@id": "http://environment.data.gov.uk/flood-monitoring/id/floods/112FWFISL10A",
+      "description": "River Isle from Chard Reservoir to Hambridge not including Ilminster",
+      "eaAreaName": "Wessex",
+      "eaRegionName": "No longer used",
+      "floodArea": {
+        "@id": "http://environment.data.gov.uk/flood-monitoring/id/floodAreas/112FWFISL10A",
+        "county": "Somerset",
+        "notation": "112FWFISL10A",
+        "polygon": "http://environment.data.gov.uk/flood-monitoring/id/floodAreas/112FWFISL10A/polygon",
+        "riverOrSea": "River Isle"
+      },
+      "floodAreaID": "112FWFISL10A",
+      "isTidal": false,
+      "message": "SYNTHETIC TEST DATA. Flooding is expected. Never drive through flood water.",
+      "severity": "Flood warning",
+      "severityLevel": 2,
+      "timeMessageChanged": "2026-01-05T06:00:00",
+      "timeRaised": "2026-01-05T06:10:00",
+      "timeSeverityChanged": "2026-01-05T06:00:00"
+    },
+    {
+      "@id": "http://environment.data.gov.uk/flood-monitoring/id/floods/112WAFTSSR",
+      "description": "South Somerset Rivers, Upper Reaches",
+      "eaAreaName": "Wessex",
+      "eaRegionName": "No longer used",
+      "floodArea": {
+        "@id": "http://environment.data.gov.uk/flood-monitoring/id/floodAreas/112WAFTSSR",
+        "county": "Somerset",
+        "notation": "112WAFTSSR",
+        "polygon": "http://environment.data.gov.uk/flood-monitoring/id/floodAreas/112WAFTSSR/polygon",
+        "riverOrSea": "River Isle, River Parrett"
+      },
+      "floodAreaID": "112WAFTSSR",
+      "isTidal": false,
+      "message": "SYNTHETIC TEST DATA. Flooding is expected. Never drive through flood water.",
+      "severity": "Flood alert",
+      "severityLevel": 3,
+      "timeMessageChanged": "2026-01-05T06:00:00",
+      "timeRaised": "2026-01-05T06:10:00",
+      "timeSeverityChanged": "2026-01-05T06:00:00"
+    },
+    {
+      "@id": "http://environment.data.gov.uk/flood-monitoring/id/floods/111WATCHXH",
+      "description": "Christchurch Harbour",
+      "eaAreaName": "Wessex",
+      "eaRegionName": "No longer used",
+      "floodArea": {
+        "@id": "http://environment.data.gov.uk/flood-monitoring/id/floodAreas/111WATCHXH",
+        "county": "Bournemouth, Christchurch and Poole",
+        "notation": "111WATCHXH",
+        "polygon": "http://environment.data.gov.uk/flood-monitoring/id/floodAreas/111WATCHXH/polygon",
+        "riverOrSea": "English Channel"
+      },
+      "floodAreaID": "111WATCHXH",
+      "isTidal": true,
+      "message": "There is no longer a threat of flooding, though standing water and debris may still remain.\u00a0\nTidal conditions are expected to improve and no flooding is expected.  \u00a0\nWe will continue to monitor the situation and will issue further alerts or warnings if necessary.  \u00a0\nIf you have been evacuated only return to your property once the emergency services have advised that it is safe to do so. Never drive through flood water,  just 30cm of fast flowing water is enough to move your car.  \n\n",
+      "severity": "Warning no longer in force",
+      "severityLevel": 4,
+      "timeMessageChanged": "2026-09-30T09:19:00",
+      "timeRaised": "2026-09-30T09:19:31",
+      "timeSeverityChanged": "2026-09-30T09:19:00"
+    }
+  ]
+}

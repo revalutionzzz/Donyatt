@@ -11,7 +11,7 @@ The tool combines Environment Agency (EA) river/rain data, a flood-likelihood pr
 ## Stack
 
 - Cloudflare Workers (TypeScript), Cron Triggers, D1 (SQLite), KV (cached status), R2 (photos), Turnstile (report spam protection), static assets served by the Worker (not Pages).
-- Deploys via GitHub Actions using secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Never commit secrets or IDs that belong in secrets.
+- Deploys via **Cloudflare Workers Builds** (the Cloudflare GitHub integration): Cloudflare builds the Worker `donyatt-flood-watch` on each push to `main` and runs `npm run deploy`, which applies D1 migrations and then runs `wrangler deploy`. No Cloudflare API token is stored in GitHub or in Claude sessions. GitHub Actions runs tests only (`.github/workflows/ci.yml`). Never commit secrets. The D1 database ID and KV namespace ID in `wrangler.toml` are not secrets, because they're useless without account access.
 - The prediction model is trained in Python (in `/model`, run locally or by GitHub Actions), exported as JSON coefficients/thresholds, and evaluated in the Worker. No heavy ML at runtime.
 
 ## Data sources
@@ -36,6 +36,9 @@ Notes:
 
 - **Use the `mASD` Donyatt measure.** The station also lists `52115-level-stage-i-15_min-m`, but that one stopped updating on 2026-06-16. `mASD` (metres above stage datum) is on the same scale as the thresholds below: the stage scale (`/id/stations/52115/stageScale`) gives the typical range as 0.124–1.2 m, the max on record as 2.632 m (2000-12-31) and the highest recent as 2.42 m (2013-12-24). If readings stop, check the station's `measures` list again rather than assuming the ID is permanent.
 - The flood-monitoring API labels rain gauges only as "Rainfall station". The name comes from the hydrology API, which labels `52129` as "Chards Snowdon Hill" (spelled *Snowdon*), open since 2017-03-29. Rainfall history before 2017 needs a different gauge.
+- **The Hydrology API Donyatt series changes datum.** Until 2026-09-16 07:15Z it is in metres above Ordnance Datum (stage + 35 m, the `datum` in the stage scale). After that it is in stage metres. There is also a stray `0.0` at 2026-08-19 15:45Z. `model/backfill.py` converts everything to stage metres and keeps the raw value. The live flood-monitoring `mASD` measure is already in stage metres.
+- Hydrology API timestamps have no `Z` suffix but are UTC (they match the flood-monitoring API reading for reading).
+- Parent flood **alert** area for `112FWFISL10A` is `112WAFTSSR` ("South Somerset Rivers, Upper Reaches"). The collector records both.
 - The flood area's official label is "River Isle from Chard Reservoir to Hambridge not including Ilminster".
 
 ## Known Donyatt gauge thresholds (from the EA)
@@ -71,6 +74,23 @@ Notes:
 - Only create new resources prefixed `donyatt-`. Never modify, redeploy, rename or delete anything that already exists.
 - No routes or custom domains on existing zones, and no DNS or zone changes of any kind. Deploy to the `workers.dev` subdomain only. `wrangler.toml` must contain no `routes` entries.
 - If any command would affect an existing resource, stop and ask.
+
+### Cloudflare resources (created by the owner in the dashboard, 2026-09-30)
+
+| Resource | Name | Binding |
+|---|---|---|
+| Worker | `donyatt-flood-watch` (workers.dev only) | — |
+| D1 | `donyatt-db` | `DB` |
+| KV | `donyatt-status` | `STATUS` |
+
+## Repo layout and commands
+
+- `src/`: the Worker. `collector.ts` is the 15-minute cron job, `ea.ts` the EA API client and `config.ts` the EA IDs.
+- `migrations/`: D1 schema (applied on deploy by `npm run deploy`).
+- `test/`: Vitest tests. `fixtures/` holds real saved EA responses; files named `*synthetic*` are invented data in the EA shape. `d1-sqlite.ts` is a small D1 stand-in on Node's built-in SQLite. (`@cloudflare/vitest-pool-workers` currently fails to install with npm 10.)
+- `model/`: Python. `backfill.py` downloads history into `model/data/` (git-ignored).
+- `npm test`, `npm run typecheck`, `npm run dev` (then `curl "localhost:8787/__scheduled?cron=*/15+*+*+*+*"` to trigger the collector and `curl localhost:8787/health` to see the results). Run `npm run db:migrate:local` once first.
+- `cd model && python3 -m unittest test_backfill`
 
 ## Working conventions
 

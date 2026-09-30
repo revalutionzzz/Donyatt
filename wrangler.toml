@@ -1,0 +1,23 @@
+# Donyatt Flood Watch Worker.
+# Safety: deploys to workers.dev only. Do NOT add `routes`, `route` or custom domains.
+name = "donyatt-flood-watch"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "donyatt-db"
+database_id = "d5056217-20ae-42b3-a980-967408c3d457"
+migrations_dir = "migrations"
+
+# Used from Stage 2 (cached road status).
+[[kv_namespaces]]
+binding = "STATUS"
+id = "683fae22ded14b73ad42acf6cbfacab1"
