@@ -136,8 +136,8 @@ describe("wrangler.toml safety rules", () => {
     expect(config).not.toMatch(/custom_domain/);
   });
 
-  it("only uses donyatt- prefixed names", () => {
-    expect(config).toMatch(/^name = "donyatt-flood-watch"$/m);
+  it("uses the donyatt Worker name and donyatt- resource names", () => {
+    expect(config).toMatch(/^name = "donyatt"\s*(#.*)?$/m);
     for (const [, name] of config.matchAll(/(?:database_name|bucket_name)\s*=\s*"([^"]+)"/g)) {
       expect(name).toMatch(/^donyatt-/);
     }

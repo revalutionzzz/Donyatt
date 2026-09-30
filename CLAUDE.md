@@ -11,7 +11,7 @@ The tool combines Environment Agency (EA) river/rain data, a flood-likelihood pr
 ## Stack
 
 - Cloudflare Workers (TypeScript), Cron Triggers, D1 (SQLite), KV (cached status), R2 (photos), Turnstile (report spam protection), static assets served by the Worker (not Pages).
-- Deploys via **Cloudflare Workers Builds** (the Cloudflare GitHub integration): Cloudflare builds the Worker `donyatt-flood-watch` on each push to `main` and runs `npm run deploy`, which applies D1 migrations and then runs `wrangler deploy`. No Cloudflare API token is stored in GitHub or in Claude sessions. GitHub Actions runs tests only (`.github/workflows/ci.yml`). Never commit secrets. The D1 database ID and KV namespace ID in `wrangler.toml` are not secrets, because they're useless without account access.
+- Deploys via **Cloudflare Workers Builds** (the Cloudflare GitHub integration): Cloudflare builds the Worker `donyatt` on each push to `main` and runs `npm run deploy`, which applies D1 migrations and then runs `wrangler deploy`. No Cloudflare API token is stored in GitHub or in Claude sessions. GitHub Actions runs tests only (`.github/workflows/ci.yml`). Never commit secrets. The D1 database ID and KV namespace ID in `wrangler.toml` are not secrets, because they're useless without account access.
 - The prediction model is trained in Python (in `/model`, run locally or by GitHub Actions), exported as JSON coefficients/thresholds, and evaluated in the Worker. No heavy ML at runtime.
 
 ## Data sources
@@ -79,7 +79,7 @@ Notes:
 
 | Resource | Name | Binding |
 |---|---|---|
-| Worker | `donyatt-flood-watch` (workers.dev only) | — |
+| Worker | `donyatt` (workers.dev only: donyatt.n2hfwbmyn9.workers.dev). The dashboard name wins, so `name` in `wrangler.toml` must match it. | — |
 | D1 | `donyatt-db` | `DB` |
 | KV | `donyatt-status` | `STATUS` |
 

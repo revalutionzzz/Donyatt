@@ -1,6 +1,6 @@
 # Donyatt Flood Watch Worker.
 # Safety: deploys to workers.dev only. Do NOT add `routes`, `route` or custom domains.
-name = "donyatt-flood-watch"
+name = "donyatt"  # must match the Worker name in the Cloudflare dashboard
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
 workers_dev = true
