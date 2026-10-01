@@ -1,5 +1,6 @@
 # Donyatt Flood Watch Worker.
-# Safety: deploys to workers.dev only. Do NOT add `routes`, `route` or custom domains.
+# Safety: no `routes`, `route` or custom domains in this file. The custom domain
+# donyattfloodwatch.co.uk is attached to the Worker by the owner in the dashboard, so deploys never touch it.
 name = "donyatt"  # must match the Worker name in the Cloudflare dashboard
 main = "src/index.ts"
 compatibility_date = "2026-09-01"

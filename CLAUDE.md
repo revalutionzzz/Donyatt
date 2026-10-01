@@ -165,18 +165,19 @@ Notes:
 - **Before creating anything**, do a read-only inventory with Wrangler/the API: list existing Workers, D1 databases, KV namespaces and R2 buckets. Report what exists and the names you plan to use (all prefixed `donyatt-`), and confirm there are no clashes.
 - **Then stop and wait for explicit approval** before creating any resources.
 - Only create new resources prefixed `donyatt-`. Never modify, redeploy, rename or delete anything that already exists.
-- No routes or custom domains on existing zones, and no DNS or zone changes of any kind. Deploy to the `workers.dev` subdomain only. `wrangler.toml` must contain no `routes` entries.
+- Claude never makes DNS, zone, route or custom-domain changes. `wrangler.toml` must contain no `routes` entries.
+- The only custom domain is **donyattfloodwatch.co.uk** (plus `www.`), a zone the owner registered for this site and attached to the `donyatt` Worker in the dashboard on 2026-10-01. No other domain or zone may be attached to this Worker, and nothing on the owner's other zones may point at it. The `workers.dev` address stays on as a fallback.
 - If any command would affect an existing resource, stop and ask.
 
 ### Cloudflare resources (created by the owner in the dashboard, 2026-09-30)
 
 | Resource | Name | Binding |
 |---|---|---|
-| Worker | `donyatt` (workers.dev only: donyatt.n2hfwbmyn9.workers.dev). The dashboard name wins, so `name` in `wrangler.toml` must match it. | — |
+| Worker | `donyatt` at **https://donyattfloodwatch.co.uk/** (custom domain, set in the dashboard), also donyatt.n2hfwbmyn9.workers.dev. The dashboard name wins, so `name` in `wrangler.toml` must match it. `SITE_URL` in `src/config.ts` (used in Telegram alerts) and the canonical/Open Graph tags in `index.html` use the custom domain. | — |
 | D1 | `donyatt-db` | `DB` |
 | KV | `donyatt-status` | `STATUS` |
 | R2 | `donyatt-photos` (lifecycle: delete after 2 days; public access off) | `PHOTOS` |
-| Turnstile | widget `donyatt-reports`, site key in `wrangler.toml` `[vars]` | — |
+| Turnstile | widget `donyatt-reports`, site key in `wrangler.toml` `[vars]`. Its hostname list must include every address the site is served on, or reports fail there. | — |
 | Telegram channel | https://t.me/donyattfloodwatch (`TELEGRAM_CHANNEL_URL` in `[vars]`) | — |
 | Worker secrets | `TURNSTILE_SECRET_KEY`, `ADMIN_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (set by the owner, 2026-10-01) | — |
 
@@ -188,6 +189,7 @@ Notes:
 - `public/`: the static site.
   - `index.html`, `styles.css` and `app.js`: plain JS with no dependencies, rendering SVG charts by hand. Chart colours are level = blue, rain = aqua, checked with the dataviz palette validator. Status colours are reserved for Open/Caution/Avoid and always shown with an icon and label. Animations are off under `prefers-reduced-motion`.
   - Motion: the river gauge (`renderTank` in `app.js`) is a small simulation. A spring eases the water level and a damped oscillator makes the surface slosh, with two travelling ripples on top. It gets kicked by level changes and taps, and shows bubbles while rising. On phones it uses the motion sensors: `deviceorientation` sets the resting tilt so the surface stays level with the world (adjusted for screen rotation, capped at 35°), and `devicemotion` shakes push the slosh. iOS needs `DeviceOrientationEvent.requestPermission()`, which is only ever called from a tap on the gauge; Android needs no prompt. Sensors are ignored under reduced motion. It runs on `requestAnimationFrame` only while on screen and the tab is visible, and draws one still frame under reduced motion. Road cards update in place, so status colours can transition. Panels reveal on scroll via a position check, not IntersectionObserver alone, so a fast scroll can't leave one hidden.
+  - Logo: `icons/icon.svg`, a church tower on the hill above the River Isle and a flood depth post (the tower is a generic drawing, not traced from St Mary's). `node scripts/render-icons.cjs` (needs Playwright) renders the PNG icons, `avatar-512.png` (round, with the name, for the Telegram channel) and `social-card.png` (link previews). The page header shows the logo next to the name; the app icon has no text, because it is unreadable at small sizes.
   - Installable web app: `manifest.webmanifest`, icons in `icons/` (rendered from `icons/icon.svg`), and `sw.js`. The service worker never caches the status or any data. It only caches `offline.html`, which says the status can't be shown and repeats "never drive into floodwater". The page uses the browser's install prompt where there is one (Android, desktop Chrome/Edge) and shows Share → Add to Home Screen steps on iOS. A banner offers it after 15 s, and dismissing it hides it for 30 days (`localStorage`). Never shown when already installed.
   - `data/flood-history.json`: annual peaks and every ≥ 1.80 m event, regenerated with `python3 model/analyse_events.py --json public/data/flood-history.json`.
 - Endpoints: `/api/config` (whether reports and photos are on, plus the Turnstile site key), `POST /api/reports` (JSON, or multipart with `photo`), `/api/photos/:id` (visible photos only), `/admin.html` with `/api/admin/reports` (moderation), `/` (page), `/api/status` (JSON, cached 60 s), `/api/history?days=1|2|7` (level, hourly rain and the next 12 h of forecast rain for the charts, cached 5 min; tops up missing days from the EA once), `/health` (collector diagnostics). The cron also tops up history hourly via `fillHistory`, a no-op once 7 days are stored.

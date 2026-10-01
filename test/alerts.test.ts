@@ -75,7 +75,7 @@ describe("Telegram alerts", () => {
     expect(body).toMatchObject({ chat_id: "@donyatt_test", parse_mode: "HTML" });
     expect(body.text).toContain("⛔ <b>AVOID</b> · A358 south of Donyatt");
     expect(body.text).toContain("Never drive into floodwater");
-    expect(body.text).toContain("https://donyatt.n2hfwbmyn9.workers.dev/");
+    expect(body.text).toContain("https://donyattfloodwatch.co.uk/");
     expect(body.text.toLowerCase()).not.toContain("safe");
     // No repeat while nothing changes.
     await h.step(30, 1.9);
