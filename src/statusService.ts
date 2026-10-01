@@ -1,7 +1,8 @@
+import { processAlerts, type AlertSender } from "./alerts";
 import { runCollector, type CollectorResult } from "./collector";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
-import type { DriverReport } from "./reports";
-import { REPORTS } from "./rules";
+import { VISIBLE_PHOTO_SQL, type DriverReport } from "./reports";
+import { PHOTOS, REPORTS } from "./rules";
 import { logStatus } from "./statusLog";
 import { computeStatus, type ActiveWarning, type StatusInputs, type StatusReport, type TimedValue } from "./status";
 
@@ -57,20 +58,31 @@ export async function loadStatusInputs(db: D1Database, now: Date): Promise<Statu
   }
   const { results: reports } = await db
     .prepare(
-      `SELECT road_id AS roadId, kind, created_at AS createdAt FROM reports
-       WHERE hidden = 0 AND created_at >= ? ORDER BY created_at`,
+      `SELECT r.id, r.road_id AS roadId, r.kind, r.created_at AS createdAt,
+         ${VISIBLE_PHOTO_SQL} AS photoVisible
+       FROM reports r
+       WHERE r.hidden = 0 AND r.created_at >= ? ORDER BY r.created_at`,
     )
-    .bind(new Date(t - REPORTS.expireMinutes * 60_000).toISOString())
-    .all<DriverReport>();
-  return { now, levels, rain, warnings, warningsCheckedAt: lastCheck?.started_at ?? null, reports };
+    .bind(
+      new Date(t - PHOTOS.maxAgeHours * 3_600_000).toISOString(),
+      PHOTOS.corroborateMinutes,
+      new Date(t - REPORTS.expireMinutes * 60_000).toISOString(),
+    )
+    .all<Omit<DriverReport, "photoVisible"> & { photoVisible: number }>();
+  return {
+    now, levels, rain, warnings, warningsCheckedAt: lastCheck?.started_at ?? null,
+    reports: reports.map((r) => ({ ...r, photoVisible: r.photoVisible === 1 })),
+  };
 }
 
 /** Recompute the road status from D1 and cache it in KV. */
-export async function refreshStatus(db: D1Database, kv: KVNamespace, now = new Date()): Promise<StatusReport> {
+export async function refreshStatus(db: D1Database, kv: KVNamespace, now = new Date(), alerts?: AlertSender): Promise<StatusReport> {
   const report = computeStatus(await loadStatusInputs(db, now));
   await kv.put(STATUS_KV_KEY, JSON.stringify(report));
   // History for learning; a logging failure must never block the live status.
   await logStatus(db, report).catch((err) => console.error("Status log failed:", err instanceof Error ? err.message : err));
+  // Alerts likewise must never block the status.
+  if (alerts) await processAlerts(db, kv, report, alerts).catch((err) => console.error("Alerts failed:", err instanceof Error ? err.message : err));
   return report;
 }
 
@@ -106,9 +118,10 @@ export async function getStatus(
   kv: KVNamespace,
   now = Date.now(),
   fetchFn: typeof fetch = fetch,
+  alerts?: AlertSender,
 ): Promise<StatusReport> {
   const cached = await kv.get<StatusReport>(STATUS_KV_KEY, "json");
   if (cached && now - Date.parse(cached.generatedAt) < STALE_RUN_MS) return cached;
   await runCollectorIfStale(db, now, fetchFn);
-  return refreshStatus(db, kv, new Date(now));
+  return refreshStatus(db, kv, new Date(now), alerts);
 }

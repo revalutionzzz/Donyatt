@@ -94,4 +94,25 @@ export const REPORTS = {
   avoidAtDoNotAttempt: 1.5,
   cautionAtDoNotAttempt: 0.5,
   cautionAtCare: 1.0,
+  /** A report whose photo is approved or corroborated counts this much more ("Do not attempt" + photo = Avoid). */
+  verifiedPhotoMultiplier: 1.5,
 };
+
+/** Report photos (Stage 3b). */
+export const PHOTOS = {
+  maxBytes: 1_500_000,
+  maxDimension: 2048,
+  /** Site-wide cap; after it, reports are still accepted without photos until the next UTC day. */
+  maxPerDay: 300,
+  /** Never served after this, even if the R2 lifecycle rule hasn't removed the file yet. */
+  maxAgeHours: 48,
+  /** Another report of the same kind for the same road, from a different device, within this window. */
+  corroborateMinutes: 60,
+};
+
+/**
+ * Telegram alerts (Stage 4). Escalations (to Caution or Avoid) are sent at once. Anything else
+ * (easing, or Unknown) is sent only once the new status has held this long, so a river hovering
+ * around a threshold doesn't spam subscribers.
+ */
+export const ALERTS = { holdMinutes: 30 };

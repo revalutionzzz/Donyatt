@@ -94,6 +94,37 @@ Notes:
   - Use both to tune per-road thresholds and hold times, and to score past calls. Learning may only **suggest** threshold changes; a human approves them in a PR.
 - Gotcha: a DOM element with `id="turnstile"` shadows `window.turnstile`. The widget container is `#turnstile-box`.
 
+### Report photos (Stage 3b; built, off until the R2 bucket exists)
+
+- **Switching on:**
+  1. Create the R2 bucket `donyatt-photos` with a lifecycle rule deleting objects after 2 days.
+  2. Uncomment the `[[r2_buckets]]` block in `wrangler.toml`. A binding to a bucket that doesn't exist breaks deploys, so don't uncomment it early.
+  3. `/api/config` then reports `photosEnabled`.
+- **On the phone:** the page decodes the photo, scales it to ≤ 1600 px and re-encodes it as JPEG through a canvas, which drops EXIF/GPS.
+- **On the server** (`src/jpeg.ts`): it doesn't trust the client.
+  - Rejects anything that isn't a JPEG, or is over 1.5 MB or 2048 px.
+  - Strips APP1–APP15 and COM segments (EXIF, GPS, XMP, ICC, comments).
+  - Stores the result at `reports/<id>-<uuid>.jpg`.
+- **Visibility** (`VISIBLE_PHOTO_SQL` in `src/reports.ts`, used for both serving and status):
+  - A photo is shown only if approved in `/admin.html`, or corroborated by a same-kind report for the same road from another device within 60 min.
+  - Never if hidden, rejected, or over 48 h old (`PHOTOS` in `src/rules.ts`).
+  - Rejecting deletes the R2 object straight away.
+- **Effect on status:** a report with a visible photo weighs ×1.5, so one "Do not attempt" with a checked photo means Avoid.
+- **Cost guard:** 300 photos a day site-wide. After that, reports are still accepted, without photos.
+
+## Telegram alerts (Stage 4; built, off until the bot secrets exist)
+
+- **Switching on:** add Worker secrets `TELEGRAM_BOT_TOKEN` (from @BotFather) and `TELEGRAM_CHAT_ID` (e.g. `@channelname` for a public channel with the bot as admin). Check them with "Send test alert" on `/admin.html` (`POST /api/admin/alerts/test`).
+- **Where it runs** (`src/alerts.ts`): `processAlerts` runs inside `refreshStatus` after the status log, so a change from any path (cron, request backstop, report, moderation) is announced straight away. Alert failures never block the status.
+- **When it sends:**
+  - Escalations (to Caution or Avoid) go out at once.
+  - Easing, and Unknown, go out only after holding for `ALERTS.holdMinutes` (30), so a river hovering at a threshold doesn't spam people.
+  - The first run after switch-on records statuses silently.
+  - Several roads changing together go out as one message.
+- **State:** the last announced status per road is kept in KV (`alerts:state:v1`). A failed send leaves it unchanged, so the next refresh retries.
+- **Record:** every attempt goes into `alerts_sent`.
+- **Message text:** HTML-escaped, always ends with "Never drive into floodwater" and the site link, and never says "safe".
+
 ## Product rules (non-negotiable)
 
 - Never describe a road as "safe". Use Open / Caution / Avoid and "never drive into floodwater" messaging.
@@ -134,7 +165,7 @@ Notes:
 - `public/`: the static site.
   - `index.html`, `styles.css` and `app.js`: plain JS with no dependencies, rendering SVG charts by hand. Chart colours are level = blue, rain = aqua, checked with the dataviz palette validator. Status colours are reserved for Open/Caution/Avoid and always shown with an icon and label. Animations are off under `prefers-reduced-motion`.
   - `data/flood-history.json`: annual peaks and every ≥ 1.80 m event, regenerated with `python3 model/analyse_events.py --json public/data/flood-history.json`.
-- Endpoints: `/api/config` (whether reports are on, plus the Turnstile site key), `POST /api/reports`, `/admin.html` with `/api/admin/reports` (moderation), `/` (page), `/api/status` (JSON, cached 60 s), `/api/history?days=1|2|7` (level and hourly rain for the charts, cached 5 min; tops up missing days from the EA once), `/health` (collector diagnostics). The cron also tops up history hourly via `fillHistory`, a no-op once 7 days are stored.
+- Endpoints: `/api/config` (whether reports and photos are on, plus the Turnstile site key), `POST /api/reports` (JSON, or multipart with `photo`), `/api/photos/:id` (visible photos only), `/admin.html` with `/api/admin/reports` (moderation), `/` (page), `/api/status` (JSON, cached 60 s), `/api/history?days=1|2|7` (level and hourly rain for the charts, cached 5 min; tops up missing days from the EA once), `/health` (collector diagnostics). The cron also tops up history hourly via `fillHistory`, a no-op once 7 days are stored.
 - `migrations/`: D1 schema (applied on deploy by `npm run deploy`).
 - `test/`: Vitest tests. `fixtures/` holds real saved EA responses; files named `*synthetic*` are invented data in the EA shape. `d1-sqlite.ts` is a small D1 stand-in on Node's built-in SQLite. (`@cloudflare/vitest-pool-workers` currently fails to install with npm 10.)
 - `model/`: Python. `backfill.py` downloads history into `model/data/` (git-ignored). `analyse_events.py` (needs `pip install -r model/requirements.txt`) regenerates `model/reports/flood_events.md`, the evidence behind the thresholds in `src/rules.ts`.

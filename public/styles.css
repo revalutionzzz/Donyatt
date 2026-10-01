@@ -266,3 +266,17 @@ footer p { margin: 8px 0; }
 .report-msg { min-height: 1.4em; margin: 10px 0 0; font-weight: 600; }
 .report-msg.ok { color: var(--ink); }
 .report-msg.error { color: var(--st-avoid); }
+
+/* ---------- Report photos ---------- */
+.road-photo { display: block; margin-top: 12px; border-radius: 12px; overflow: hidden; position: relative; background: var(--surface-2); text-decoration: none; }
+.road-photo img { display: block; width: 100%; height: 160px; object-fit: cover; }
+.road-photo span { position: absolute; left: 8px; bottom: 8px; background: rgba(0, 0, 0, 0.62); color: #fff; font-size: 0.78rem; font-weight: 600; padding: 3px 8px; border-radius: 999px; }
+.photo-field { margin-top: 12px; }
+.photo-add {
+  display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 650;
+  border: 1px dashed var(--axis); border-radius: 12px; padding: 10px 12px; color: var(--ink);
+}
+.photo-add svg { width: 22px; height: 22px; flex: none; color: var(--ink-2); }
+.photo-add small { font-weight: 400; color: var(--ink-2); }
+.photo-preview { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.photo-preview img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; }

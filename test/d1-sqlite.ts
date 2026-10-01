@@ -23,7 +23,7 @@ class Statement {
   }
   runSync() {
     const r = this.db.prepare(this.sql).run(...this.params);
-    return { success: true, results: [], meta: { changes: Number(r.changes) } };
+    return { success: true, results: [], meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } };
   }
 }
 

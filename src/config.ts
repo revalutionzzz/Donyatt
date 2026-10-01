@@ -18,3 +18,6 @@ export const INITIAL_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 
 /** Donyatt stage readings outside this range are almost certainly a datum/sensor problem, not a flood. */
 export const PLAUSIBLE_LEVEL_M = { min: -0.5, max: 4 };
+
+/** Public address of the site, used in alert messages. */
+export const SITE_URL = "https://donyatt.n2hfwbmyn9.workers.dev/";

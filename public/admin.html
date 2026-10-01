@@ -27,6 +27,12 @@
     <p class="meta" id="msg"></p>
   </section>
   <section class="panel">
+    <h2>Telegram alerts</h2>
+    <p class="meta">Sends a test message to the alerts channel, to check the bot token and chat ID secrets.</p>
+    <button class="act" type="button" id="test-alert">Send test alert</button>
+    <p class="meta" id="alert-msg"></p>
+  </section>
+  <section class="panel">
     <h2>Last 14 days</h2>
     <div class="table-wrap" style="max-height:none"><table class="data" id="list"></table></div>
   </section>
@@ -52,7 +58,7 @@
       $("msg").textContent = `${reports.length} reports.`;
       const table = $("list");
       const head = el("tr");
-      for (const h of ["When", "Road", "Report", "River", "We showed", "Device", ""]) head.append(el("th", h));
+      for (const h of ["When", "Road", "Report", "River", "We showed", "Device", "Photo", ""]) head.append(el("th", h));
       table.replaceChildren(head);
       for (const r of reports) {
         const tr = el("tr");
@@ -60,6 +66,33 @@
         const when = new Date(r.createdAt).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "short", timeStyle: "short" });
         tr.append(el("td", when), el("td", ROADS[r.roadId] || r.roadId), el("td", LABELS[r.kind] || r.kind),
           el("td", r.levelM == null ? "–" : `${r.levelM.toFixed(2)} m`), el("td", r.statusShown || "–"), el("td", r.device));
+        const photoTd = el("td");
+        if (r.hasPhoto) {
+          photoTd.append(el("div", r.photoState || "pending"));
+          if (r.photoStored) {
+            const img = el("img");
+            img.alt = "Report photo";
+            img.style.cssText = "width:96px;height:72px;object-fit:cover;border-radius:6px;display:block;margin:4px 0";
+            // Pending photos aren't public, so fetch with the token and show a local copy.
+            fetch(`/api/admin/photos/${r.id}`, { headers: { authorization: `Bearer ${token}` } })
+              .then((res) => (res.ok ? res.blob() : null))
+              .then((b) => { if (b) img.src = URL.createObjectURL(b); });
+            photoTd.append(img);
+            for (const action of ["approve", "reject"]) {
+              if (r.photoState === "approved" && action === "approve") continue;
+              const b = el("button", action === "approve" ? "Approve" : "Reject & delete");
+              b.className = "act";
+              b.style.marginRight = "4px";
+              b.addEventListener("click", async () => {
+                if (action === "reject" && !confirm("Delete this photo?")) return;
+                try { await api(`/api/admin/reports/${r.id}/photo/${action}`, "POST", {}); load(); }
+                catch (err) { $("msg").textContent = err.message; }
+              });
+              photoTd.append(b);
+            }
+          }
+        }
+        tr.append(photoTd);
         const btn = el("button", r.hidden ? "Unhide" : "Hide");
         btn.className = "act";
         btn.addEventListener("click", async () => {
@@ -80,6 +113,11 @@
     token = $("token").value.trim();
     sessionStorage.setItem("dfw-admin", token);
     load();
+  });
+  $("test-alert").addEventListener("click", async () => {
+    $("alert-msg").textContent = "Sending…";
+    try { await api("/api/admin/alerts/test", "POST", {}); $("alert-msg").textContent = "Sent. Check the channel."; }
+    catch (err) { $("alert-msg").textContent = err.message; }
   });
   if (token) load();
 })();

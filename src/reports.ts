@@ -12,13 +12,17 @@ export interface DriverReport {
   roadId: string;
   kind: ReportKind;
   createdAt: string;
+  /** Report id, set when it has a photo that may be shown. */
+  id?: number;
+  /** Has a photo that is approved, or corroborated by another driver, and not rejected. */
+  photoVisible?: boolean;
 }
 
 export interface ReportSummary {
   /** Weighted totals (0-1 per report, fading with age). */
   weights: Record<ReportKind, number>;
-  /** Reports still carrying weight, newest first, with their age. */
-  recent: { kind: ReportKind; ageMinutes: number }[];
+  /** Reports still carrying weight, newest first, with their age (and photo id if one may be shown). */
+  recent: { kind: ReportKind; ageMinutes: number; photoId?: number }[];
 }
 
 /** 1 while fresh, fading linearly to 0 at REPORTS.expireMinutes. */
@@ -37,8 +41,10 @@ export function summariseReports(reports: DriverReport[], roadId: string, now: D
     const ageMinutes = Math.max(0, (now.getTime() - Date.parse(r.createdAt)) / 60_000);
     const w = reportWeight(ageMinutes);
     if (w <= 0) continue;
-    weights[r.kind] += w;
-    recent.push({ kind: r.kind, ageMinutes: Math.round(ageMinutes) });
+    weights[r.kind] += w * (r.photoVisible ? REPORTS.verifiedPhotoMultiplier : 1);
+    const entry: ReportSummary["recent"][number] = { kind: r.kind, ageMinutes: Math.round(ageMinutes) };
+    if (r.photoVisible && r.id != null) entry.photoId = r.id;
+    recent.push(entry);
   }
   recent.sort((a, b) => a.ageMinutes - b.ageMinutes);
   return { weights, recent };
@@ -51,3 +57,15 @@ export function describeReports(summary: ReportSummary, kind: ReportKind): strin
   const age = matching[0].ageMinutes < 1 ? "just now" : `${matching[0].ageMinutes} min ago`;
   return `${who} reported "${REPORT_LABELS[kind]}" (latest ${age}).`;
 }
+
+/**
+ * SQL condition (report alias `r`): its photo may be shown publicly. Approved, or corroborated by a
+ * same-kind report for the same road from another device within N minutes; never hidden, rejected
+ * or older than the cutoff. Binds: (cutoff ISO time, corroboration minutes).
+ */
+export const VISIBLE_PHOTO_SQL = `(r.has_photo = 1 AND r.photo_key IS NOT NULL AND r.hidden = 0
+  AND COALESCE(r.photo_state, '') <> 'rejected' AND r.created_at >= ?
+  AND (r.photo_state = 'approved' OR EXISTS (
+    SELECT 1 FROM reports o WHERE o.road_id = r.road_id AND o.kind = r.kind AND o.id <> r.id
+      AND o.hidden = 0 AND o.device_hash <> r.device_hash
+      AND ABS(julianday(o.created_at) - julianday(r.created_at)) * 1440 <= ?)))`;
