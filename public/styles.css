@@ -135,12 +135,9 @@ main { max-width: 960px; margin: -36px auto 0; padding: 0 16px 40px; position: r
 
 /* River gauge (animated water column) */
 .gauge-wrap { display: flex; gap: 16px; align-items: stretch; }
-.tank { width: 92px; flex: none; }
-.tank svg { width: 100%; height: 240px; display: block; }
-.tank .wave-a { animation: slosh 3.2s ease-in-out infinite; }
-.tank .wave-b { animation: slosh 4.4s ease-in-out infinite reverse; }
-@keyframes slosh { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-40px); } }
-.tank .water { transition: transform 1.2s cubic-bezier(.2, .7, .2, 1); }
+.tank { width: 110px; flex: none; cursor: pointer; touch-action: manipulation; border-radius: 18px; -webkit-tap-highlight-color: transparent; }
+.tank:focus-visible { outline: 2px solid var(--series-level); outline-offset: 3px; }
+.tank svg { width: 100%; height: 260px; display: block; }
 .reading { display: flex; flex-direction: column; justify-content: center; }
 .figure { font-size: 3.2rem; font-weight: 750; line-height: 1; letter-spacing: -0.02em; }
 .figure small { font-size: 1.2rem; font-weight: 650; color: var(--ink-2); margin-left: 2px; }
@@ -304,3 +301,21 @@ footer p { margin: 8px 0; }
 .chart .future { fill: var(--surface-2); }
 .chart .now-line { stroke: var(--ink-2); stroke-width: 1; }
 .chart .bar-forecast { opacity: 0.45; }
+
+/* ---------- Fluid touches ---------- */
+.road { transition: border-color 0.8s ease, box-shadow 0.3s ease, transform 0.3s ease; }
+.chip { transition: background-color 0.8s ease, color 0.8s ease; }
+@media (hover: hover) {
+  .road:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(16, 24, 32, 0.08), 0 14px 32px rgba(16, 24, 32, 0.1); }
+}
+.road.changed { animation: status-glow 1.6s ease-out; }
+@keyframes status-glow {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--st) 55%, transparent), var(--shadow); }
+  100% { box-shadow: 0 0 0 16px transparent, var(--shadow); }
+}
+.reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.6s ease, transform 0.7s cubic-bezier(.2, .7, .2, 1); }
+.reveal.in { opacity: 1; transform: none; }
+.panel, .road { will-change: auto; }
+.outlook .meter-fill { transition: width 1.2s cubic-bezier(.2, .7, .2, 1), background-color 0.8s ease; }
+.seg button { transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; }
+.chart svg { transition: opacity 0.25s ease; }
