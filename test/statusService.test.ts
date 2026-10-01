@@ -83,7 +83,7 @@ describe("status caching", () => {
     await runCollector(d1, new Date("2026-09-30T20:05:00Z"), fakeFetch().fn);
     const report = await refreshStatus(d1, kv, NOW);
 
-    expect(report.roads.map((r) => r.status)).toEqual(["open", "open", "open"]);
+    expect(report.roads.map((r) => r.status)).toEqual(["open"]);
     expect(JSON.parse(store.get(STATUS_KV_KEY)!)).toEqual(report);
   });
 
@@ -108,7 +108,7 @@ describe("status caching", () => {
     expect(f.count()).toBe(4);
     expect(report.generatedAt).toBe(new Date(NOW.getTime() + 3 * 3_600_000).toISOString());
     // The fixture readings are now over 3 h old: stale data is never "open".
-    expect(report.roads.map((r) => r.status)).toEqual(["unknown", "unknown", "unknown"]);
+    expect(report.roads.map((r) => r.status)).toEqual(["unknown"]);
   });
 });
 
@@ -123,7 +123,7 @@ describe("/api/status", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("public, max-age=60");
     const body = await res.json<StatusReport>();
-    expect(body.roads).toHaveLength(3);
+    expect(body.roads).toHaveLength(1);
     expect(body.advice).toMatch(/Never drive into floodwater/);
   });
 

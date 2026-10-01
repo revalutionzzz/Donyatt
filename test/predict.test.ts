@@ -141,7 +141,7 @@ describe("predictOutlook", () => {
       const { levels, rain } = seriesFor(f as Record<FeatureName, number>);
       const report = computeStatus({ now: NOW, levels, rain, warnings: [], warningsCheckedAt: iso(NOW.getTime() - 5 * 60_000) });
       if (report.outlook && report.outlook.band !== "low") {
-        expect(report.roads.map((r) => r.status)).toEqual(["caution", "caution", "caution"]);
+        expect(report.roads.map((r) => r.status)).toEqual(["caution"]);
       }
       expect(report.roads.some((r) => r.status === "avoid")).toBe(false);
     });

@@ -36,9 +36,9 @@ const warning = (severityLevel: number, floodAreaId = "112FWFISL10A"): ActiveWar
 });
 
 describe("computeStatus", () => {
-  it("is Open for all roads in normal conditions, and never says 'safe'", () => {
+  it("is Open in normal conditions, and never says 'safe'", () => {
     const report = computeStatus(inputs());
-    expect(statuses(inputs())).toEqual({ "a358-donyatt": "open", "b3168-ilford-bridges": "open", "isle-brewers-fivehead": "open" });
+    expect(statuses(inputs())).toEqual({ "a358-donyatt": "open" });
     expect(JSON.stringify(report).toLowerCase()).not.toContain("safe");
     expect(report.advice).toMatch(/Never drive into floodwater/);
     expect(report.dataProblems).toEqual([]);
@@ -70,21 +70,13 @@ describe("computeStatus", () => {
     expect(a358(inputs({ levels: series([1.5, 1.51, 1.52, 1.53, 1.54, 1.55]) })).status).toBe("caution");
   });
 
-  it("keeps downstream roads on Avoid/Caution longer than the A358 after the peak", () => {
-    // Peaked at 1.9 m two hours ago, now 1.5 m and falling.
-    const levels = series([1.9, 1.9, 1.85, 1.8, 1.75, 1.7, 1.65, 1.6, 1.5]);
-    expect(statuses(inputs({ levels }))).toEqual({
-      "a358-donyatt": "caution",
-      "b3168-ilford-bridges": "avoid",
-      "isle-brewers-fivehead": "avoid",
-    });
-    // Back in the normal range but above 1.2 m four hours ago: downstream stays on Caution.
-    const receded = series([1.3, ...Array(16).fill(0.9)]);
-    expect(statuses(inputs({ levels: receded }))).toEqual({
-      "a358-donyatt": "open",
-      "b3168-ilford-bridges": "caution",
-      "isle-brewers-fivehead": "caution",
-    });
+  it("holds Avoid for an hour after the peak, then eases", () => {
+    // 1.9 m 50 min ago, now 1.5 m and falling: still Avoid.
+    expect(a358(inputs({ levels: series([1.9, 1.6, 1.5]) })).status).toBe("avoid");
+    // Peaked at 1.9 m two hours ago, now 1.5 m: Caution (above normal), no longer Avoid.
+    expect(a358(inputs({ levels: series([1.9, 1.9, 1.85, 1.8, 1.75, 1.7, 1.65, 1.6, 1.5]) })).status).toBe("caution");
+    // Above 1.2 m four hours ago, normal since: Open.
+    expect(a358(inputs({ levels: series([1.3, ...Array(16).fill(0.9)]) })).status).toBe("open");
   });
 
   it("an EA flood warning means Avoid for every road, whatever the gauge says", () => {
