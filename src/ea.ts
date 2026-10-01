@@ -71,6 +71,15 @@ export function parseFloods(body: unknown, areas: readonly string[]): FloodWarni
   return out;
 }
 
+/** Readings for whole UTC days, from startDate to endDate inclusive (YYYY-MM-DD). */
+export function rangeReadingsUrl(measureId: string, startDate: string, endDate: string): string {
+  return `${EA_BASE}/id/measures/${measureId}/readings?startdate=${startDate}&enddate=${endDate}&_sorted&_limit=2000`;
+}
+
+export async function fetchReadingsRange(measureId: string, startDate: string, endDate: string, fetchFn: typeof fetch = fetch) {
+  return parseReadings(await getJson(rangeReadingsUrl(measureId, startDate, endDate), fetchFn));
+}
+
 export async function fetchReadings(measureId: string, since: string, fetchFn: typeof fetch = fetch) {
   return parseReadings(await getJson(readingsUrl(measureId, since), fetchFn));
 }
