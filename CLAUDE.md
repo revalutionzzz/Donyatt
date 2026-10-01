@@ -103,10 +103,11 @@ Notes:
   - Strips APP1–APP15 and COM segments (EXIF, GPS, XMP, ICC, comments).
   - Stores the result at `reports/<id>-<uuid>.jpg`.
 - **Visibility** (`VISIBLE_PHOTO_SQL` in `src/reports.ts`, used for both serving and status):
-  - A photo is shown only if approved in `/admin.html`, or corroborated by a same-kind report for the same road from another device within 60 min.
-  - Never if hidden, rejected, or over 48 h old (`PHOTOS` in `src/rules.ts`).
-  - Rejecting deletes the R2 object straight away.
-- **Effect on status:** a report with a visible photo weighs ×1.5, so one "Do not attempt" with a checked photo means Avoid.
+  - Since 2026-10-02, at the owner's request, photos are shown **straight away** with the report. The owner didn't want to approve photos by hand. (Before that, a photo needed admin approval or a same-kind report from another device within 60 min.)
+  - Never shown if the report is hidden, the photo rejected, or over 48 h old (`PHOTOS` in `src/rules.ts`).
+  - Moderation is after the fact: hide the report or reject the photo in `/admin.html`. Rejecting deletes the R2 object straight away.
+  - The page footer asks people not to photograph people or number plates.
+- **Effect on status:** only a photo the admin **approved** weighs ×1.5 (one "Do not attempt" with an approved photo means Avoid). Unapproved photos are shown but add no weight, so one person can't push the status alone with a photo.
 - **Cost guard:** 300 photos a day site-wide. After that, reports are still accepted, without photos.
 
 ## Telegram alerts (Stage 4; on since 2026-10-01, test alert confirmed)
@@ -149,7 +150,7 @@ Notes:
 - Never describe a road as "safe". Use Open / Caution / Avoid and "never drive into floodwater" messaging.
 - Crowd reports (Clear / Passable with care / Do not attempt) lose weight with age, and every report shows its age.
 - Reports can never downgrade the status below what an active EA warning or the gauge threshold implies.
-- Photos: strip EXIF/location, resize, keep hidden until corroborated or approved, and auto-delete after 24–48 h via R2 lifecycle rules.
+- Photos: strip EXIF/location, resize, and auto-delete after 24–48 h via R2 lifecycle rules. (Originally "keep hidden until corroborated or approved"; the owner chose on 2026-10-02 to show them straight away, with after-the-fact moderation and no extra status weight unless approved.)
 - Rate-limit reports per device. Turnstile on all submissions.
 
 ## Build stages (one PR each, in order)

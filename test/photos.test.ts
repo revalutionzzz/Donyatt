@@ -89,25 +89,25 @@ const admin = (path: string, method = "GET") =>
   new Request(`https://donyatt.example${path}`, { method, headers: { authorization: "Bearer admin-token-xyz", "content-type": "application/json" }, body: method === "POST" ? "{}" : undefined });
 
 describe("photo upload", () => {
-  it("stores the photo without metadata, hidden until checked", async () => {
+  it("stores the photo without metadata and shows it straight away, without extra weight", async () => {
     const { env, sqlite, objects } = await setup();
     const res = await postReport(postWithPhoto({}), env, NOW, fetchFn);
     expect(res.status).toBe(201);
     const body = await res.json<{ photoNote: string; road: { status: string; reports: { recent: { photoId?: number }[] } } }>();
-    expect(body.photoNote).toMatch(/appear once it's checked/);
-    // One unverified "Do not attempt": Caution, and no photo shown.
-    expect(body.road.status).toBe("caution");
-    expect(body.road.reports.recent[0].photoId).toBeUndefined();
-
+    expect(body.photoNote).toMatch(/shown with your report/);
     const row = sqlite.prepare("SELECT id, has_photo, photo_state, photo_key FROM reports").get() as { id: number; photo_key: string };
     expect(row).toMatchObject({ has_photo: 1, photo_state: "pending" });
+    // One "Do not attempt" with an unapproved photo: shown, but still only Caution.
+    expect(body.road.status).toBe("caution");
+    expect(body.road.reports.recent[0].photoId).toBe(row.id);
+
     const stored = objects.get(row.photo_key)!;
     expect(has(stored, "Exif")).toBe(false);
     expect(has(stored, "LeakyPhone")).toBe(false);
-    expect((await getPhoto(env, row.id, later(1))).status).toBe(404);
+    expect((await getPhoto(env, row.id, later(1))).status).toBe(200);
   });
 
-  it("shows the photo once approved, which also makes 'Do not attempt' an Avoid", async () => {
+  it("an approved photo adds weight, so 'Do not attempt' becomes Avoid", async () => {
     const { env, sqlite } = await setup();
     await postReport(postWithPhoto({}), env, NOW, fetchFn);
     const { id } = sqlite.prepare("SELECT id FROM reports").get() as { id: number };
@@ -123,20 +123,13 @@ describe("photo upload", () => {
     expect(status.roads[0].reports.recent[0].photoId).toBe(id);
   });
 
-  it("shows the photo when another driver confirms the same thing", async () => {
+  it("hiding the report takes its photo down", async () => {
     const { env, sqlite } = await setup();
     await postReport(postWithPhoto({}), env, NOW, fetchFn);
-    await postReport(postWithPhoto({ deviceId: "device-bbbb-2222" }, null, "198.51.100.9"), env, later(20), fetchFn);
-    const { id } = sqlite.prepare("SELECT id FROM reports WHERE has_photo = 1").get() as { id: number };
-    expect((await getPhoto(env, id, later(21))).status).toBe(200);
-  });
-
-  it("a different kind of report doesn't count as confirmation", async () => {
-    const { env, sqlite } = await setup();
-    await postReport(postWithPhoto({}), env, NOW, fetchFn);
-    await postReport(postWithPhoto({ deviceId: "device-bbbb-2222", kind: "clear" }, null, "198.51.100.9"), env, later(20), fetchFn);
-    const { id } = sqlite.prepare("SELECT id FROM reports WHERE has_photo = 1").get() as { id: number };
-    expect((await getPhoto(env, id, later(21))).status).toBe(404);
+    const { id } = sqlite.prepare("SELECT id FROM reports").get() as { id: number };
+    const path = `/api/admin/reports/${id}/hide`;
+    expect((await adminReports(admin(path, "POST"), env, path, later(1))).status).toBe(200);
+    expect((await getPhoto(env, id, later(2))).status).toBe(404);
   });
 
   it("rejecting deletes the file straight away", async () => {
@@ -153,8 +146,6 @@ describe("photo upload", () => {
     const { env, sqlite } = await setup();
     await postReport(postWithPhoto({}), env, NOW, fetchFn);
     const { id } = sqlite.prepare("SELECT id FROM reports").get() as { id: number };
-    const path = `/api/admin/reports/${id}/photo/approve`;
-    await adminReports(admin(path, "POST"), env, path, later(1));
     expect((await getPhoto(env, id, later(47 * 60))).status).toBe(200);
     expect((await getPhoto(env, id, later(49 * 60))).status).toBe(404);
   });

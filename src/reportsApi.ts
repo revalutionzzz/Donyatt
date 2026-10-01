@@ -215,7 +215,7 @@ async function storePhoto(env: ReportsEnv, reportId: number, bytes: Uint8Array, 
     .prepare("UPDATE reports SET has_photo = 1, photo_state = 'pending', photo_key = ? WHERE id = ?")
     .bind(key, reportId)
     .run();
-  return "Your photo will appear once it's checked or another driver confirms the same thing.";
+  return "Your photo is shown with your report and deleted after 2 days.";
 }
 
 async function photoResponse(env: ReportsEnv, key: string, cacheControl: string): Promise<Response> {
@@ -226,12 +226,12 @@ async function photoResponse(env: ReportsEnv, key: string, cacheControl: string)
   });
 }
 
-/** GET /api/photos/:id — only photos that are approved or corroborated, and under 48 h old. */
+/** GET /api/photos/:id — photos that aren't hidden or rejected, and under 48 h old. */
 export async function getPhoto(env: ReportsEnv, id: number, now = new Date()): Promise<Response> {
   if (!env.PHOTOS || !Number.isInteger(id)) return json({ error: "Photo not found." }, 404);
   const row = await env.DB
     .prepare(`SELECT r.photo_key AS key FROM reports r WHERE r.id = ? AND ${VISIBLE_PHOTO_SQL}`)
-    .bind(id, new Date(now.getTime() - PHOTOS.maxAgeHours * 3_600_000).toISOString(), PHOTOS.corroborateMinutes)
+    .bind(id, new Date(now.getTime() - PHOTOS.maxAgeHours * 3_600_000).toISOString())
     .first<{ key: string }>();
   if (!row) return json({ error: "Photo not found." }, 404);
   return photoResponse(env, row.key, "public, max-age=300");
