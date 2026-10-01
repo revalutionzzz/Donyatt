@@ -177,6 +177,7 @@ Notes:
 | KV | `donyatt-status` | `STATUS` |
 | R2 | `donyatt-photos` (lifecycle: delete after 2 days; public access off) | `PHOTOS` |
 | Turnstile | widget `donyatt-reports`, site key in `wrangler.toml` `[vars]` | — |
+| Telegram channel | https://t.me/donyattfloodwatch (`TELEGRAM_CHANNEL_URL` in `[vars]`) | — |
 | Worker secrets | `TURNSTILE_SECRET_KEY`, `ADMIN_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (set by the owner, 2026-10-01) | — |
 
 ## Repo layout and commands

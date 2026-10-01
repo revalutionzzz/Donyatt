@@ -26,6 +26,8 @@ id = "683fae22ded14b73ad42acf6cbfacab1"
 [vars]
 # Turnstile site key (public). Driver reports stay switched off until this and the secret are both set.
 TURNSTILE_SITE_KEY = "0x4AAAAAAFLR2J8xDV4aS2yW"
+# Public Telegram alerts channel, linked from the page ("Stay up to date").
+TELEGRAM_CHANNEL_URL = "https://t.me/donyattfloodwatch"
 
 # Report photos (Stage 3b). The donyatt-photos bucket was created in the dashboard on 2026-10-01,
 # with a lifecycle rule deleting objects after 2 days.
