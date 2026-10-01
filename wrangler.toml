@@ -25,14 +25,13 @@ id = "683fae22ded14b73ad42acf6cbfacab1"
 # Public values only. Secrets (TURNSTILE_SECRET_KEY, ADMIN_TOKEN) are set as Worker secrets in the dashboard.
 [vars]
 # Turnstile site key (public). Driver reports stay switched off until this and the secret are both set.
-TURNSTILE_SITE_KEY = ""
+TURNSTILE_SITE_KEY = "0x4AAAAAAFLR2J8xDV4aS2yW"
 
-# Report photos (Stage 3b). Leave commented out until the donyatt-photos R2 bucket exists in the
-# dashboard (with a lifecycle rule deleting objects after 2 days). A binding to a missing bucket
-# makes deploys fail. Until then, reports are accepted without photos.
-# [[r2_buckets]]
-# binding = "PHOTOS"
-# bucket_name = "donyatt-photos"
+# Report photos (Stage 3b). The donyatt-photos bucket was created in the dashboard on 2026-10-01,
+# with a lifecycle rule deleting objects after 2 days.
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "donyatt-photos"
 
 # Static page (public/index.html). Files are served directly; other paths (/api/status, /health) reach the Worker.
 [assets]
