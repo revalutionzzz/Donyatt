@@ -31,7 +31,8 @@ describe("/health", () => {
     const f = fakeFetch();
     const body = await (await health(env(d1), nextTime(), f.fn)).json<Record<string, any>>();
 
-    expect(f.count()).toBe(3);
+    // Level, rain and warnings from the EA, plus the Open-Meteo forecast.
+    expect(f.count()).toBe(4);
     expect(body.cronLooksHealthy).toBe(false);
     expect(body.fallbackRun).toMatchObject({ levelOk: true, rainOk: true, warningsOk: true, readingsInserted: 16 });
     expect(body.donyattLevelM).toEqual({ ts: "2026-09-30T20:00:00Z", value: expect.any(Number) });
@@ -60,7 +61,7 @@ describe("/health", () => {
     const second = fakeFetch();
     const body = await (await health(env(empty), t + 30 * 1000, second.fn)).json<Record<string, any>>();
 
-    expect(first.count()).toBe(3);
+    expect(first.count()).toBe(4);
     expect(second.count()).toBe(0);
     expect(body.cronLooksHealthy).toBe(false);
   });

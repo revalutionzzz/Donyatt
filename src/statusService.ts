@@ -1,4 +1,5 @@
 import { processAlerts, type AlertSender } from "./alerts";
+import { collectForecast, latestForecast } from "./forecast";
 import { runCollector, type CollectorResult } from "./collector";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
 import { VISIBLE_PHOTO_SQL, type DriverReport } from "./reports";
@@ -15,7 +16,8 @@ let lastFallbackAt = 0;
 
 /** Level history needed: the longest road hold (6 h) plus the rise window. */
 const LEVEL_HISTORY_HOURS = 8;
-const RAIN_HISTORY_HOURS = 12;
+/** 72 h for the model's longest rain window. */
+const RAIN_HISTORY_HOURS = 72;
 
 const isoSeconds = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 
@@ -69,8 +71,9 @@ export async function loadStatusInputs(db: D1Database, now: Date): Promise<Statu
       new Date(t - REPORTS.expireMinutes * 60_000).toISOString(),
     )
     .all<Omit<DriverReport, "photoVisible"> & { photoVisible: number }>();
+  const forecast = await latestForecast(db, now);
   return {
-    now, levels, rain, warnings, warningsCheckedAt: lastCheck?.started_at ?? null,
+    now, levels, rain, warnings, warningsCheckedAt: lastCheck?.started_at ?? null, forecast,
     reports: reports.map((r) => ({ ...r, photoVisible: r.photoVisible === 1 })),
   };
 }
@@ -106,7 +109,10 @@ export async function runCollectorIfStale(
   if (lastRunAgeMs < STALE_RUN_MS || now - lastFallbackAt < FALLBACK_THROTTLE_MS) return { ran: false, lastRunAgeMs };
   lastFallbackAt = now;
   try {
-    return { ran: true, lastRunAgeMs, result: await runCollector(db, new Date(now), fetchFn) };
+    const result = await runCollector(db, new Date(now), fetchFn);
+    // Self-throttled to hourly; a forecast failure never affects the collector result.
+    await collectForecast(db, new Date(now), fetchFn).catch((err) => console.error("Forecast failed:", err instanceof Error ? err.message : err));
+    return { ran: true, lastRunAgeMs, result };
   } catch (err) {
     return { ran: true, lastRunAgeMs, error: err instanceof Error ? err.message : String(err) };
   }

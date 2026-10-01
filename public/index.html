@@ -33,6 +33,27 @@
   <section class="roads" id="roads" aria-label="Road status"></section>
   <p class="problems" id="problems" hidden></p>
 
+  <section class="panel outlook b-none" id="outlook" aria-labelledby="outlook-h">
+    <h2 id="outlook-h">Flood outlook</h2>
+    <p class="sub">Chance the river at Donyatt reaches road-flooding level (1.80 m) soon. A guide, not a guarantee.</p>
+    <div class="outlook-row">
+      <div class="outlook-main">
+        <div class="outlook-band" id="outlook-band">–</div>
+        <div class="outlook-figures"><span><b id="outlook-p6">–</b> within 6 hours</span><span><b id="outlook-p3">–</b> within 3 hours</span></div>
+      </div>
+      <div class="meter" id="outlook-meter" role="meter" aria-label="Chance within 6 hours" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="meter-fill" id="outlook-meter-fill"></div>
+        <span class="meter-tick" style="left:10%"></span><span class="meter-tick" style="left:40%"></span>
+      </div>
+      <div class="meter-scale"><span>Low</span><span style="left:10%">Elevated</span><span style="left:40%">High</span></div>
+    </div>
+    <p class="meta" id="outlook-detail"></p>
+    <details class="meta">
+      <summary>How the outlook works</summary>
+      <p>A statistical model trained on the Environment Agency's records for Donyatt and the Chard rain gauge since 2017. It looks at how high the river is, how fast it's changing, how much rain has fallen over the last 3 days and, when available, the rain forecast. Tested on floods from 2023 to 2026 that it never saw during training, it gave warning before all of them, typically about 2½ hours before roads flooded. An Elevated or High outlook puts roads on Caution. It can't see everything (blocked drains, other streams), so always follow road signs and never drive into floodwater.</p>
+    </details>
+  </section>
+
   <div class="grid-2">
     <section class="panel" aria-labelledby="river-h">
       <h2 id="river-h">River Isle at Donyatt</h2>

@@ -280,3 +280,27 @@ footer p { margin: 8px 0; }
 .photo-add small { font-weight: 400; color: var(--ink-2); }
 .photo-preview { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
 .photo-preview img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; }
+
+/* ---------- Flood outlook & forecast ---------- */
+.outlook-row { display: grid; gap: 8px; margin: 4px 0 6px; }
+.outlook-main { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.outlook-band { font-size: 2rem; font-weight: 800; letter-spacing: -0.01em; }
+.outlook-figures { display: flex; gap: 14px; color: var(--ink-2); flex-wrap: wrap; }
+.outlook-figures b { color: var(--ink); font-size: 1.1rem; }
+.meter { position: relative; height: 12px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--ring); overflow: hidden; }
+.meter-fill { height: 100%; width: 0; border-radius: 6px; background: var(--st-open); transition: width 1s cubic-bezier(.2, .7, .2, 1); }
+.meter-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--axis); }
+.meter-scale { position: relative; height: 16px; font-size: 0.75rem; color: var(--muted); }
+.meter-scale span { position: absolute; top: 0; }
+.meter-scale span:first-child { left: 0; }
+.b-elevated .meter-fill { background: var(--st-caution); }
+.b-high .meter-fill { background: var(--st-avoid); }
+.b-none .meter-fill { background: var(--st-unknown); }
+.outlook { border-left: 6px solid var(--st-open); }
+.outlook.b-elevated { border-left-color: var(--st-caution); }
+.outlook.b-high { border-left-color: var(--st-avoid); }
+.outlook.b-none { border-left-color: var(--st-unknown); }
+.outlook details summary { cursor: pointer; color: var(--ink-2); }
+.chart .future { fill: var(--surface-2); }
+.chart .now-line { stroke: var(--ink-2); stroke-width: 1; }
+.chart .bar-forecast { opacity: 0.45; }

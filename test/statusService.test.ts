@@ -104,7 +104,8 @@ describe("status caching", () => {
     const f = fakeFetch();
     const report = await getStatus(d1, kv, NOW.getTime() + 3 * 3_600_000, f.fn);
 
-    expect(f.count()).toBe(3);
+    // Level, rain and warnings from the EA, plus the Open-Meteo forecast.
+    expect(f.count()).toBe(4);
     expect(report.generatedAt).toBe(new Date(NOW.getTime() + 3 * 3_600_000).toISOString());
     // The fixture readings are now over 3 h old: stale data is never "open".
     expect(report.roads.map((r) => r.status)).toEqual(["unknown", "unknown", "unknown"]);
