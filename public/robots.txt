@@ -1,0 +1,7 @@
+# Donyatt Flood Watch
+User-agent: *
+Disallow: /admin.html
+Disallow: /api/admin/
+Allow: /
+
+Sitemap: https://donyattfloodwatch.co.uk/sitemap.xml

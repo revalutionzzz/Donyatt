@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Donyatt Flood Watch</title>
-<meta name="description" content="Live River Isle flood status for the A358 south of Donyatt, near Ilminster, Somerset.">
+<title>Donyatt Flood Watch: A358 flooding at Donyatt, live River Isle level</title>
+<meta name="description" content="Is the A358 flooded at Donyatt? Live River Isle level at the Donyatt gauge, Environment Agency flood warnings, rain at Chard and driver reports, for the A358 south of Donyatt near Ilminster, Somerset.">
 <meta name="theme-color" content="#0a2f47">
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
@@ -35,7 +35,7 @@
       <h1>Donyatt Flood Watch</h1>
     </div>
     <p>Live flooding status for the A358 south of Donyatt, checked every 5 minutes</p>
-    <div class="summary" aria-live="polite"><span class="dot" id="summary-dot"></span><span id="summary">Loading the latest status…</span></div>
+    <div class="summary" aria-live="polite" data-nosnippet><span class="dot" id="summary-dot"></span><span id="summary">Loading the latest status…</span></div>
   </div>
   <div class="waves" aria-hidden="true">
     <svg viewBox="0 0 1440 56" preserveAspectRatio="none"><path class="w1" d="M0 26c120-18 240-18 360 0s240 18 360 0 240-18 360 0 240 18 360 0v30H0z"/></svg>
@@ -49,12 +49,12 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4"/><path d="M12 17.5v.01"/></svg>
     <span id="advice">Never drive into floodwater. Just 30 cm of moving water can float a car. If in doubt, turn around.</span>
   </p>
-  <p class="meta" id="updated"></p>
+  <p class="meta" id="updated" data-nosnippet></p>
 
-  <section class="roads" id="roads" aria-label="Road status"></section>
-  <p class="problems" id="problems" hidden></p>
+  <section class="roads" id="roads" aria-label="Road status" data-nosnippet></section>
+  <p class="problems" id="problems" hidden data-nosnippet></p>
 
-  <section class="panel outlook b-none" id="outlook" aria-labelledby="outlook-h">
+  <section class="panel outlook b-none" id="outlook" aria-labelledby="outlook-h" data-nosnippet>
     <h2 id="outlook-h">Flood outlook</h2>
     <p class="sub">Chance the river at Donyatt reaches road-flooding level (1.80 m) soon. A guide, not a guarantee.</p>
     <div class="outlook-row">
@@ -76,7 +76,7 @@
   </section>
 
   <div class="grid-2">
-    <section class="panel" aria-labelledby="river-h">
+    <section class="panel" aria-labelledby="river-h" data-nosnippet>
       <h2 id="river-h">River Isle at Donyatt</h2>
       <p class="sub" id="reading-age">Latest Environment Agency reading</p>
       <div class="gauge-wrap">
@@ -96,7 +96,7 @@
       </div>
     </section>
 
-    <section class="panel" aria-labelledby="trend-h">
+    <section class="panel" aria-labelledby="trend-h" data-nosnippet>
       <h2 id="trend-h">River level and upstream rain</h2>
       <p class="sub">Level at the Donyatt gauge, and rain at Chard (Snowdon Hill) a few miles upstream.</p>
       <div class="toolbar">
@@ -116,7 +116,7 @@
 
   <section class="panel warnings" aria-labelledby="warn-h">
     <h2 id="warn-h">Environment Agency flood warnings</h2>
-    <div id="warnings" class="sub">Checking…</div>
+    <div id="warnings" class="sub" data-nosnippet>Checking…</div>
     <p class="meta"><a href="https://check-for-flooding.service.gov.uk/target-area/112FWFISL10A" rel="noopener">EA warning page for the River Isle</a></p>
   </section>
 
