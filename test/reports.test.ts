@@ -172,8 +172,16 @@ describe("status log", () => {
 
 describe("/api/config", () => {
   it("only exposes the site key when reports are fully set up", async () => {
-    expect(await apiConfig({ TURNSTILE_SITE_KEY: "site", TURNSTILE_SECRET_KEY: "s" } as ReportsEnv).json()).toEqual({ reportsEnabled: true, photosEnabled: false, turnstileSiteKey: "site" });
-    expect(await apiConfig({ TURNSTILE_SITE_KEY: "site" } as ReportsEnv).json()).toEqual({ reportsEnabled: false, photosEnabled: false, turnstileSiteKey: null });
+    expect(await apiConfig({ TURNSTILE_SITE_KEY: "site", TURNSTILE_SECRET_KEY: "s" } as ReportsEnv).json()).toEqual({ reportsEnabled: true, photosEnabled: false, turnstileSiteKey: "site", telegramUrl: null });
+    expect(await apiConfig({ TURNSTILE_SITE_KEY: "site" } as ReportsEnv).json()).toEqual({ reportsEnabled: false, photosEnabled: false, turnstileSiteKey: null, telegramUrl: null });
+  });
+
+  it("links the public Telegram channel, never a private chat ID", async () => {
+    const url = async (over: Partial<ReportsEnv>) => (await apiConfig(over as ReportsEnv).json<{ telegramUrl: string | null }>()).telegramUrl;
+    expect(await url({ TELEGRAM_CHAT_ID: "@donyatt_floods" })).toBe("https://t.me/donyatt_floods");
+    expect(await url({ TELEGRAM_CHAT_ID: "-1001234567890" })).toBeNull();
+    expect(await url({ TELEGRAM_CHAT_ID: "-1001234567890", TELEGRAM_CHANNEL_URL: "https://t.me/donyatt_floods" })).toBe("https://t.me/donyatt_floods");
+    expect(await url({ TELEGRAM_CHANNEL_URL: "javascript:alert(1)" })).toBeNull();
     expect(await apiConfig({ TURNSTILE_SITE_KEY: "site", TURNSTILE_SECRET_KEY: "s", PHOTOS: {} } as ReportsEnv).json()).toMatchObject({ photosEnabled: true });
   });
 });
@@ -244,7 +252,7 @@ describe("POST /api/reports", () => {
     await postReport(post(good()), env, API_NOW, f.fn);
     const res = await postReport(post(good({ deviceId: "device-bbbb-2222" }), "198.51.100.9"), env, new Date(API_NOW.getTime() + 60_000), f.fn);
     expect((await res.json<{ road: { status: string } }>()).road.status).toBe("avoid");
-    expect(JSON.parse(store.get("status:v1")!).roads[0].status).toBe("avoid");
+    expect(JSON.parse(store.get("status:v2")!).roads[0].status).toBe("avoid");
   });
 });
 
@@ -277,6 +285,6 @@ describe("admin moderation", () => {
 
     const path = `/api/admin/reports/${list.reports[0].id}/hide`;
     expect((await adminReports(adminReq(path, "POST"), env, path, new Date(API_NOW.getTime() + 2 * 60_000))).status).toBe(200);
-    expect(JSON.parse(store.get("status:v1")!).roads[0].status).toBe("caution");
+    expect(JSON.parse(store.get("status:v2")!).roads[0].status).toBe("caution");
   });
 });

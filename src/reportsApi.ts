@@ -19,6 +19,19 @@ export interface ReportsEnv {
   /** Telegram alerts (Worker secrets). Off until both exist. */
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
+  /** Public link to the alerts channel, if TELEGRAM_CHAT_ID isn't a public @username (a [vars] entry). */
+  TELEGRAM_CHANNEL_URL?: string;
+}
+
+/**
+ * The public Telegram channel link for the page, or null. A public channel's @username is public
+ * by definition, so it's safe to derive the link from TELEGRAM_CHAT_ID; a numeric (private) ID is
+ * never exposed.
+ */
+export function telegramChannelUrl(env: ReportsEnv): string | null {
+  if (env.TELEGRAM_CHANNEL_URL && /^https:\/\/t\.me\/[A-Za-z0-9_+\/-]+$/.test(env.TELEGRAM_CHANNEL_URL)) return env.TELEGRAM_CHANNEL_URL;
+  const m = /^@([A-Za-z0-9_]{4,32})$/.exec(env.TELEGRAM_CHAT_ID?.trim() ?? "");
+  return m ? `https://t.me/${m[1]}` : null;
 }
 
 export const LIMITS = {
@@ -45,6 +58,7 @@ export function apiConfig(env: ReportsEnv): Response {
     reportsEnabled: reportsEnabled(env),
     photosEnabled: reportsEnabled(env) && Boolean(env.PHOTOS),
     turnstileSiteKey: reportsEnabled(env) ? env.TURNSTILE_SITE_KEY : null,
+    telegramUrl: telegramChannelUrl(env),
   });
 }
 

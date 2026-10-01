@@ -157,6 +157,39 @@ main { max-width: 960px; margin: -36px auto 0; padding: 0 16px 40px; position: r
 
 /* Charts */
 .chart { position: relative; }
+/* Stay up to date: Telegram channel and add to home screen. */
+.stay-grid { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 12px; }
+@media (min-width: 760px) { .stay-grid:has(> .stay-item:not([hidden]) + .stay-item:not([hidden])) { grid-template-columns: 1fr 1fr; } }
+.stay-item { display: flex; gap: 12px; align-items: flex-start; background: var(--surface-2); border-radius: 12px; padding: 14px; }
+.stay-item[hidden] { display: none; }
+.stay-item h3 { margin: 0 0 4px; font-size: 1rem; }
+.stay-item p { margin: 0 0 8px; color: var(--ink-2); font-size: 0.93rem; }
+.stay-item .meta { color: var(--muted); font-size: 0.85rem; }
+.stay-list { margin: 0 0 8px; padding-left: 18px; color: var(--ink-2); font-size: 0.93rem; }
+.stay-icon { flex: none; width: 40px; height: 40px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; }
+.stay-icon img { width: 40px; height: 40px; display: block; }
+.stay-icon.tg { background: #229ed9; color: #fff; }
+.stay-icon.tg svg { width: 24px; height: 24px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-weight: 650; font-size: 0.95rem; padding: 9px 16px; border-radius: 999px; border: 0; background: var(--brand-2); color: #fff; text-decoration: none; cursor: pointer; }
+.btn:hover { filter: brightness(1.1); }
+.btn:focus-visible { outline: 3px solid var(--water-1); outline-offset: 2px; }
+.tg-btn { background: #1d8cc4; }
+.install-steps { font-size: 0.9rem; }
+.share-ico { width: 18px; height: 18px; vertical-align: -3px; color: #1d8cc4; }
+.install-banner {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 50;
+  max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 12px;
+  background: var(--surface); color: var(--ink); border-radius: 16px; padding: 12px 12px 12px 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25); animation: banner-in 0.35s ease-out both;
+}
+.install-banner[hidden] { display: none; }
+.install-banner img { flex: none; border-radius: 10px; }
+.install-banner p { flex: 1; margin: 0; font-size: 0.9rem; line-height: 1.35; }
+.install-banner p b { display: block; }
+.install-banner p span { color: var(--muted); }
+.install-banner .close { flex: none; }
+@keyframes banner-in { from { transform: translateY(24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .install-banner { animation: none; } }
 .forecast-summary { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 12px; font-size: 0.9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .forecast-summary b { color: var(--ink-2); }
 .forecast-summary .fc-title { width: 100%; color: var(--ink-2); font-weight: 650; }

@@ -104,5 +104,7 @@ describe("/api/history", () => {
     const body = await (await apiHistory({ DB: d1 } as Env, 1, now.getTime(), fn)).json<{ rainForecast: [string, number][]; forecastFetchedAt: string }>();
     expect(body.forecastFetchedAt).toBe(now.toISOString());
     expect(body.rainForecast.length).toBeGreaterThan(0);
+    // [hour start, mm, % chance of rain]
+    expect(body.rainForecast[0]).toEqual(["2026-09-30T20:00:00Z", 0, 5]);
   });
 });

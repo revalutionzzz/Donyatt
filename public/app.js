@@ -500,13 +500,14 @@
   }
 
   /** "Now" divider and a shaded forecast zone, when the chart extends into the future. */
-  function drawNow(s, x, now, t1, width, top, bottom, label) {
+  function drawNow(s, x, now, t1, width, top, bottom, label, label2) {
     if (t1 <= now + 60_000) return;
     const nx = x(now);
     s.append(svg("rect", { class: "future", x: nx, y: top, width: width - M.r - nx, height: bottom - top }));
     s.append(svg("line", { class: "now-line", x1: nx, x2: nx, y1: top - 4, y2: bottom }));
     // Right-aligned so it never runs off the edge of a narrow chart.
     if (label) s.append(svg("text", { class: "label", x: width - M.r - 2, y: top + 10, "text-anchor": "end" }, label));
+    if (label2) s.append(svg("text", { class: "label", x: width - M.r - 2, y: top + 24, "text-anchor": "end" }, label2));
   }
 
   function drawLevelChart() {
@@ -531,7 +532,8 @@
       s.append(svg("text", { class: "ref-text", x: M.l + 6, y: y(v) - 5 }, label));
     }
 
-    drawNow(s, x, Date.parse(history.to), t1, width, top, bottom, "Forecast");
+    // Shaded to line up with the rain forecast below; there's no river level forecast.
+    drawNow(s, x, Date.parse(history.to), t1, width, top, bottom, null);
     if (pts.length) {
       // Break the line across gaps longer than an hour.
       const segs = [];
@@ -586,7 +588,10 @@
     const slot = x(t0 + 3_600_000) - x(t0);
     const bw = Math.max(1, Math.min(24, slot - 2));
     const fcTotal = fcBars.reduce((sum, b) => sum + b[1], 0);
-    drawNow(s, x, Date.parse(history.to), t1, width, top, bottom, fcBars.length ? `Forecast ${fcTotal.toFixed(1)} mm` : null);
+    const chance = maxChance();
+    drawNow(s, x, Date.parse(history.to), t1, width, top, bottom,
+      fcBars.length ? (fcTotal >= 0.05 ? `Forecast ${fcTotal.toFixed(1)} mm` : "Forecast: dry") : null,
+      chance == null ? null : `Up to ${chance}% chance`);
     const g = svg("g");
     for (const [list, cls] of [[bars, "bar"], [fcBars, "bar bar-forecast"]]) {
       for (const [t, mm] of list) {
@@ -601,8 +606,11 @@
       }
     }
     s.append(g);
-    if (!bars.some((b) => b[1] > 0) && !fcBars.some((b) => b[1] > 0)) {
-      s.append(svg("text", { class: "label", x: (M.l + width - M.r) / 2, y: (top + bottom) / 2 + 4, "text-anchor": "middle" }, "No rain recorded or forecast"));
+    if (!bars.some((b) => b[1] > 0)) {
+      // Centred on the past part of the chart, so it never runs into the forecast zone.
+      const pastEnd = fcBars.length ? x(Date.parse(history.to)) : width - M.r;
+      const text = fcBars.length ? "No rain recorded" : "No rain recorded or forecast";
+      s.append(svg("text", { class: "label", x: (M.l + pastEnd) / 2, y: (top + bottom) / 2 + 4, "text-anchor": "middle" }, text));
     }
 
     // Shared time axis: day boundaries (midnight UK time) plus a few hour ticks.
@@ -699,10 +707,10 @@
     const head = el("tr");
     head.append(el("th", null, "Time"), el("th", null, "River level"), el("th", null, "Rain that hour"));
     table.append(head);
-    for (const [ts, mm] of [...(history.rainForecast || [])].reverse()) {
+    for (const [ts, mm, prob] of [...(history.rainForecast || [])].reverse()) {
       const t = parseTime(ts);
       const tr = el("tr");
-      tr.append(el("td", null, `${fmtDay(t)} ${fmtTime(t)} (forecast)`), el("td", null, "–"), el("td", null, `${mm.toFixed(1)} mm forecast`));
+      tr.append(el("td", null, `${fmtDay(t)} ${fmtTime(t)} (forecast)`), el("td", null, "–"), el("td", null, `${mm.toFixed(1)} mm forecast${typeof prob === "number" ? ` (${prob}% chance)` : ""}`));
       table.append(tr);
     }
     // One row per hour (the reading on the hour), newest first.
@@ -729,6 +737,12 @@
     return total;
   }
 
+  /** Highest forecast chance of rain (%) over the next 12 h, or null if Open-Meteo didn't give one. */
+  function maxChance() {
+    const probs = (history.rainForecast || []).map((h) => h[2]).filter((p) => typeof p === "number");
+    return probs.length ? Math.max(...probs) : null;
+  }
+
   /** Numbers for the forecast, so it reads even when the bars are empty (a dry forecast). */
   function renderForecastSummary() {
     const box = $("forecast-summary");
@@ -743,10 +757,18 @@
       span.append(el("b", null, mm(forecastRain(h))));
       return span;
     });
+    const chance = maxChance();
+    if (chance != null) {
+      const span = el("span", null, "Chance of rain up to ");
+      span.append(el("b", null, `${chance}%`));
+      parts.push(span);
+    }
     const wettest = fc.reduce((a, b) => (b[1] > a[1] ? b : a));
     const note = wettest[1] >= 0.1
       ? `Wettest hour ${fmtTime(parseTime(wettest[0]))}–${fmtTime(parseTime(wettest[0]) + 3_600_000)}, ${mm(wettest[1])}.`
-      : "Dry: no rain forecast for the next 12 hours.";
+      : chance != null && chance >= 20
+        ? "Mostly dry: showers possible but no measurable amount forecast."
+        : "Dry: no rain forecast for the next 12 hours.";
     const updated = history.forecastFetchedAt ? ` Forecast updated ${fmtTime(Date.parse(history.forecastFetchedAt))}.` : "";
     const title = el("span", "fc-title", "Forecast rain at Chard");
     box.replaceChildren(title, ...parts, el("span", "fc-note", note + updated));
@@ -1207,7 +1229,85 @@
     requestAnimationFrame(check);
   }
 
-  loadConfig().then(() => { if (lastStatus) renderRoads(lastStatus.roads); });
+  // ---------------------------------------------------------------- stay up to date
+  // Telegram channel link (from /api/config) and "add to home screen". The browser's own install
+  // prompt is used where it exists (Android, desktop Chrome/Edge); iOS gets instructions instead.
+  const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const touch = matchMedia("(pointer: coarse)").matches;
+  const BANNER_KEY = "dfw-install-dismissed";
+  let installPrompt = null;
+
+  function renderStay() {
+    const tg = config?.telegramUrl;
+    $("tg-item").hidden = !tg;
+    if (tg) $("tg-link").href = tg;
+
+    const canPrompt = Boolean(installPrompt);
+    const showInstall = !standalone() && (canPrompt || isIOS || touch);
+    $("install-item").hidden = !showInstall;
+    $("install-btn").hidden = !canPrompt;
+    $("install-ios").hidden = canPrompt || !isIOS;
+    $("install-other").hidden = canPrompt || isIOS;
+    $("stay").hidden = $("tg-item").hidden && $("install-item").hidden;
+  }
+
+  async function install() {
+    if (!installPrompt) {
+      hideBanner();
+      $("install-item").scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
+      return;
+    }
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice.catch(() => ({ outcome: "dismissed" }));
+    installPrompt = null;
+    hideBanner(outcome !== "accepted");
+    renderStay();
+  }
+
+  function bannerDismissedRecently() {
+    try {
+      return Date.now() - Number(localStorage.getItem(BANNER_KEY) || 0) < 30 * 86_400_000;
+    } catch {
+      return false;
+    }
+  }
+
+  function hideBanner(remember = true) {
+    $("install-banner").hidden = true;
+    if (remember) try { localStorage.setItem(BANNER_KEY, String(Date.now())); } catch {}
+  }
+
+  function maybeShowBanner() {
+    if (standalone() || bannerDismissedRecently() || !(installPrompt || (isIOS && touch))) return;
+    if ($("report-dialog").open) return;
+    $("install-banner-sub").textContent = installPrompt ? "Check the A358 in one tap." : "Tap Share, then Add to Home Screen.";
+    $("install-banner-go").textContent = installPrompt ? "Add" : "How";
+    $("install-banner").hidden = false;
+  }
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    renderStay();
+  });
+  window.addEventListener("appinstalled", () => {
+    installPrompt = null;
+    hideBanner();
+    renderStay();
+  });
+  $("install-btn").addEventListener("click", install);
+  $("install-banner-go").addEventListener("click", install);
+  $("install-banner-close").addEventListener("click", () => hideBanner());
+  // Offer it once people have had a moment with the page, not the instant it opens.
+  setTimeout(maybeShowBanner, 15_000);
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => undefined));
+  }
+
+  renderStay();
+  loadConfig().then(() => { renderStay(); if (lastStatus) renderRoads(lastStatus.roads); });
   loadStatus();
   loadHistory();
   loadPast();
