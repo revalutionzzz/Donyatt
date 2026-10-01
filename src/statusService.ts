@@ -62,20 +62,19 @@ export async function loadStatusInputs(db: D1Database, now: Date): Promise<Statu
   const { results: reports } = await db
     .prepare(
       `SELECT r.id, r.road_id AS roadId, r.kind, r.created_at AS createdAt,
-         ${VISIBLE_PHOTO_SQL} AS photoVisible
+         ${VISIBLE_PHOTO_SQL} AS photoVisible, r.photo_state = 'approved' AS photoApproved
        FROM reports r
        WHERE r.hidden = 0 AND r.created_at >= ? ORDER BY r.created_at`,
     )
     .bind(
       new Date(t - PHOTOS.maxAgeHours * 3_600_000).toISOString(),
-      PHOTOS.corroborateMinutes,
       new Date(t - REPORTS.expireMinutes * 60_000).toISOString(),
     )
-    .all<Omit<DriverReport, "photoVisible"> & { photoVisible: number }>();
+    .all<Omit<DriverReport, "photoVisible" | "photoApproved"> & { photoVisible: number; photoApproved: number | null }>();
   const forecast = await latestForecast(db, now);
   return {
     now, levels, rain, warnings, warningsCheckedAt: lastCheck?.started_at ?? null, forecast,
-    reports: reports.map((r) => ({ ...r, photoVisible: r.photoVisible === 1 })),
+    reports: reports.map((r) => ({ ...r, photoVisible: r.photoVisible === 1, photoApproved: r.photoApproved === 1 })),
   };
 }
 

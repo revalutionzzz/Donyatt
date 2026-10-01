@@ -14,8 +14,10 @@ export interface DriverReport {
   createdAt: string;
   /** Report id, set when it has a photo that may be shown. */
   id?: number;
-  /** Has a photo that is approved, or corroborated by another driver, and not rejected. */
+  /** Has a photo that may be shown (not hidden, rejected or too old). */
   photoVisible?: boolean;
+  /** The photo was approved by the admin. Only then does it add weight to the status. */
+  photoApproved?: boolean;
 }
 
 export interface ReportSummary {
@@ -41,7 +43,7 @@ export function summariseReports(reports: DriverReport[], roadId: string, now: D
     const ageMinutes = Math.max(0, (now.getTime() - Date.parse(r.createdAt)) / 60_000);
     const w = reportWeight(ageMinutes);
     if (w <= 0) continue;
-    weights[r.kind] += w * (r.photoVisible ? REPORTS.verifiedPhotoMultiplier : 1);
+    weights[r.kind] += w * (r.photoVisible && r.photoApproved ? REPORTS.verifiedPhotoMultiplier : 1);
     const entry: ReportSummary["recent"][number] = { kind: r.kind, ageMinutes: Math.round(ageMinutes) };
     if (r.photoVisible && r.id != null) entry.photoId = r.id;
     recent.push(entry);
@@ -59,13 +61,9 @@ export function describeReports(summary: ReportSummary, kind: ReportKind): strin
 }
 
 /**
- * SQL condition (report alias `r`): its photo may be shown publicly. Approved, or corroborated by a
- * same-kind report for the same road from another device within N minutes; never hidden, rejected
- * or older than the cutoff. Binds: (cutoff ISO time, corroboration minutes).
+ * SQL condition (report alias `r`): its photo may be shown publicly. Shown straight away (since
+ * 2026-10-02, at the owner's request) unless the report is hidden, the photo rejected, or it is
+ * older than the cutoff. Binds: (cutoff ISO time).
  */
 export const VISIBLE_PHOTO_SQL = `(r.has_photo = 1 AND r.photo_key IS NOT NULL AND r.hidden = 0
-  AND COALESCE(r.photo_state, '') <> 'rejected' AND r.created_at >= ?
-  AND (r.photo_state = 'approved' OR EXISTS (
-    SELECT 1 FROM reports o WHERE o.road_id = r.road_id AND o.kind = r.kind AND o.id <> r.id
-      AND o.hidden = 0 AND o.device_hash <> r.device_hash
-      AND ABS(julianday(o.created_at) - julianday(r.created_at)) * 1440 <= ?)))`;
+  AND COALESCE(r.photo_state, '') <> 'rejected' AND r.created_at >= ?)`;

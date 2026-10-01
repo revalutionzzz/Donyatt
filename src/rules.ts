@@ -79,7 +79,7 @@ export const REPORTS = {
   avoidAtDoNotAttempt: 1.5,
   cautionAtDoNotAttempt: 0.5,
   cautionAtCare: 1.0,
-  /** A report whose photo is approved or corroborated counts this much more ("Do not attempt" + photo = Avoid). */
+  /** A report whose photo the admin approved counts this much more ("Do not attempt" + approved photo = Avoid). */
   verifiedPhotoMultiplier: 1.5,
 };
 
@@ -91,8 +91,6 @@ export const PHOTOS = {
   maxPerDay: 300,
   /** Never served after this, even if the R2 lifecycle rule hasn't removed the file yet. */
   maxAgeHours: 48,
-  /** Another report of the same kind for the same road, from a different device, within this window. */
-  corroborateMinutes: 60,
 };
 
 /**
