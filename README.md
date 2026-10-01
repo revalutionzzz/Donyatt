@@ -8,3 +8,4 @@ Project brief and rules: [CLAUDE.md](CLAUDE.md).
 
 - Stage 1 (collector): a Cloudflare Worker that stores the Donyatt river level, Chard Snowdon Hill rainfall and EA flood warnings every 15 minutes. `GET /health` shows the latest collected data.
 - Stage 2 (status): Open / Caution / Avoid for each road at `/`, JSON at `/api/status`. The rules are in `src/rules.ts`, with the evidence in `model/reports/flood_events.md`.
+- Site: live status cards, an animated river gauge, 24 h / 48 h / 7 day level and rain charts, and a chart of every flood since the 1990s.

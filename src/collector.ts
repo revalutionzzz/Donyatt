@@ -5,7 +5,7 @@ import {
   SNOWDON_HILL_RAIN_MEASURE,
   WATCHED_FLOOD_AREAS,
 } from "./config";
-import { fetchFloods, fetchReadings, type FloodWarning, type Reading } from "./ea";
+import { fetchFloods, fetchReadings, fetchReadingsRange, type FloodWarning, type Reading } from "./ea";
 
 export interface CollectorResult {
   startedAt: string;
@@ -115,4 +115,35 @@ export async function runCollector(db: D1Database, now = new Date(), fetchFn: ty
     .run();
   if (errors.length) console.error("Collector errors:", errors);
   return result;
+}
+
+/** How much history the charts show; fillHistory backfills up to this much. */
+export const HISTORY_DAYS = 7;
+
+/**
+ * One-off top-up so the 7-day charts have data: if a measure's oldest stored reading is
+ * newer than HISTORY_DAYS ago, fetch the missing days from the EA. Once filled, it does nothing.
+ */
+export async function fillHistory(db: D1Database, now = new Date(), fetchFn: typeof fetch = fetch): Promise<number> {
+  const from = new Date(now.getTime() - HISTORY_DAYS * 86_400_000);
+  let inserted = 0;
+  for (const measureId of [DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE]) {
+    const row = await db
+      .prepare("SELECT MIN(ts) AS ts FROM readings WHERE measure_id = ?")
+      .bind(measureId)
+      .first<{ ts: string | null }>();
+    // Nothing stored yet: the normal collector run comes first.
+    if (!row?.ts) continue;
+    const oldest = new Date(row.ts);
+    // Already covered, give or take a reading.
+    if (oldest.getTime() - from.getTime() < 60 * 60_000) continue;
+    const { readings } = await fetchReadingsRange(
+      measureId,
+      from.toISOString().slice(0, 10),
+      oldest.toISOString().slice(0, 10),
+      fetchFn,
+    );
+    inserted += await insertReadings(db, measureId, readings.filter((r) => r.ts >= from.toISOString().slice(0, 19)));
+  }
+  return inserted;
 }

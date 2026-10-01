@@ -1,4 +1,5 @@
-import { runCollector } from "./collector";
+import { fillHistory, runCollector } from "./collector";
+import { loadHistory } from "./history";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
 import { getStatus, refreshStatus, runCollectorIfStale, STALE_RUN_MS } from "./statusService";
 
@@ -63,10 +64,33 @@ export async function apiStatus(env: Env, now = Date.now(), fetchFn: typeof fetc
   }
 }
 
+/** At most one history top-up attempt per isolate per 10 minutes. */
+const FILL_THROTTLE_MS = 10 * 60 * 1000;
+let lastFillAt = 0;
+
+export async function apiHistory(env: Env, days: number, now = Date.now(), fetchFn: typeof fetch = fetch): Promise<Response> {
+  try {
+    let history = await loadHistory(env.DB, days, new Date(now));
+    const first = history.level[0]?.[0];
+    const short = !first || Date.parse(first) - Date.parse(history.from) > 60 * 60_000;
+    if (short && now - lastFillAt > FILL_THROTTLE_MS) {
+      lastFillAt = now;
+      if ((await fillHistory(env.DB, new Date(now), fetchFn).catch(() => 0)) > 0) {
+        history = await loadHistory(env.DB, days, new Date(now));
+      }
+    }
+    return json(history, 200, "public, max-age=300");
+  } catch (err) {
+    console.error("History failed:", errorMessage(err));
+    return json({ error: "History is unavailable right now." }, 503);
+  }
+}
+
 export default {
   async fetch(request, env): Promise<Response> {
-    const { pathname } = new URL(request.url);
+    const { pathname, searchParams } = new URL(request.url);
     if (request.method === "GET" && pathname === "/api/status") return apiStatus(env);
+    if (request.method === "GET" && pathname === "/api/history") return apiHistory(env, Number(searchParams.get("days") ?? 2));
     if (request.method === "GET" && pathname === "/health") return health(env);
     return json({ error: "Not found" }, 404);
   },
@@ -77,6 +101,10 @@ export default {
       (async () => {
         try {
           console.log("Collector run", JSON.stringify(await runCollector(env.DB)));
+          // Hourly, top up chart history if it's short (a no-op once 7 days are stored).
+          if (new Date(controller.scheduledTime).getUTCMinutes() < 15) {
+            await fillHistory(env.DB).catch((err) => console.error("History top-up failed:", errorMessage(err)));
+          }
         } catch (err) {
           console.error("Collector run failed:", errorMessage(err));
         }

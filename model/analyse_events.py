@@ -9,10 +9,13 @@ Reads the CSVs written by backfill.py and prints a Markdown report:
 
     pip install -r model/requirements.txt
     python3 model/analyse_events.py > model/reports/flood_events.md
+    python3 model/analyse_events.py --json public/data/flood-history.json   # data for the site's history chart
 """
 
 from __future__ import annotations
 
+import json
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -129,5 +132,34 @@ def main() -> None:
     print("\nTrigger rows use the period with both rain and level data (2017 onwards).")
 
 
+def export_json(path: Path) -> None:
+    """Annual peaks and every >= 1.80 m event, for the "past floods" chart on the site."""
+    level = load_level()
+    events = []
+    for t in find_events(level):
+        window = level[t : t + pd.Timedelta("48h")]
+        events.append({"date": f"{window.idxmax():%Y-%m-%d}", "peakM": round(float(window.max()), 2)})
+    years = level.groupby(level.index.year).agg(["max", "count"])
+    # Only years with at least ~80% of readings, so a partial year doesn't look like a dry one.
+    annual = [
+        {"year": int(y), "peakM": round(float(r["max"]), 2)}
+        for y, r in years.iterrows()
+        if r["count"] >= 0.8 * 35_040 or y == level.index[-1].year
+    ]
+    out = {
+        "source": "Environment Agency Hydrology API, Donyatt (52115), converted to stage metres",
+        "generated": f"{level.index[-1]:%Y-%m-%d}",
+        "roadFloodM": ROAD_FLOOD_M,
+        "annualPeaks": annual,
+        "events": events,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(out, indent=1) + "\n")
+    print(f"wrote {path}: {len(annual)} years, {len(events)} events", file=sys.stderr)
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 3 and sys.argv[1] == "--json":
+        export_json(Path(sys.argv[2]))
+    else:
+        main()

@@ -49,7 +49,7 @@ Notes:
 | 1.40 m | Low-lying land flooding possible |
 | 1.80 m | Historical road flooding at Donyatt |
 | 2.03 m | Property flooding possible / flood warning threshold |
-| 2.63 m | Highest recorded (31 Dec 2000) |
+| 2.63 m | Highest recorded (31 Dec 2000), per the EA stage scale. **Out of date:** the EA archive has higher readings graded "Good", 2.65 m on 2021-10-20 and **2.68 m on 2025-01-26**. The site takes the record from `public/data/flood-history.json`. |
 
 ## Stage 2 status rules (see `src/rules.ts` and `model/reports/flood_events.md`)
 
@@ -107,8 +107,10 @@ Notes:
 - `src/`: the Worker.
   - `collector.ts` is the 15-minute cron job, `ea.ts` the EA API client and `config.ts` the EA IDs.
   - `rules.ts` holds the status thresholds and the road list, `status.ts` the pure Open/Caution/Avoid/Unknown logic, and `statusService.ts` loads from D1, caches in KV (`status:v1`) and runs the collector itself when the cron hasn't run for 20 minutes.
-- `public/index.html`: the mobile-first status page (static asset). It reads `/api/status`.
-- Endpoints: `/` (page), `/api/status` (JSON, cached 60 s), `/health` (collector diagnostics).
+- `public/`: the static site.
+  - `index.html`, `styles.css` and `app.js`: plain JS with no dependencies, rendering SVG charts by hand. Chart colours are level = blue, rain = aqua, checked with the dataviz palette validator. Status colours are reserved for Open/Caution/Avoid and always shown with an icon and label. Animations are off under `prefers-reduced-motion`.
+  - `data/flood-history.json`: annual peaks and every ≥ 1.80 m event, regenerated with `python3 model/analyse_events.py --json public/data/flood-history.json`.
+- Endpoints: `/` (page), `/api/status` (JSON, cached 60 s), `/api/history?days=1|2|7` (level and hourly rain for the charts, cached 5 min; tops up missing days from the EA once), `/health` (collector diagnostics). The cron also tops up history hourly via `fillHistory`, a no-op once 7 days are stored.
 - `migrations/`: D1 schema (applied on deploy by `npm run deploy`).
 - `test/`: Vitest tests. `fixtures/` holds real saved EA responses; files named `*synthetic*` are invented data in the EA shape. `d1-sqlite.ts` is a small D1 stand-in on Node's built-in SQLite. (`@cloudflare/vitest-pool-workers` currently fails to install with npm 10.)
 - `model/`: Python. `backfill.py` downloads history into `model/data/` (git-ignored). `analyse_events.py` (needs `pip install -r model/requirements.txt`) regenerates `model/reports/flood_events.md`, the evidence behind the thresholds in `src/rules.ts`.
