@@ -687,12 +687,12 @@
       loadHistory();
     });
   }
-  function toggle(buttonId, wrapId, render) {
+  function toggle(buttonId, wrapId, render, labels = ["Show as table", "Hide table"]) {
     $(buttonId).addEventListener("click", (e) => {
       const wrap = $(wrapId);
       wrap.hidden = !wrap.hidden;
       e.currentTarget.setAttribute("aria-expanded", String(!wrap.hidden));
-      e.currentTarget.textContent = wrap.hidden ? "Show as table" : "Hide table";
+      e.currentTarget.textContent = wrap.hidden ? labels[0] : labels[1];
       render();
     });
   }
@@ -731,6 +731,8 @@
       s.append(svg("text", { class: "label", x: M.l - 6, y: y(v) + 4, "text-anchor": "end" }, `${v} m`));
     }
     const record = past.annualPeaks.reduce((a, b) => (b.peakM > a.peakM ? b : a));
+    const marks = new Map();
+    host._marks = marks;
     years.forEach((yr, i) => {
       const v = peaks.get(yr);
       const bx = xc(i) - bw / 2;
@@ -747,6 +749,7 @@
         }
       }
       s.append(mark);
+      marks.set(yr, mark);
       // Bigger-than-the-mark hit area.
       const hit = svg("rect", { x: M.l + slot * i, y: top, width: slot, height: bottom - top, fill: "transparent" });
       const show = () => {
@@ -761,7 +764,9 @@
       hit.addEventListener("pointerleave", () => { mark.classList.remove("hot"); hideTip(); });
       s.append(hit);
       const labelEvery = slot < 22 ? 5 : slot < 40 ? 2 : 1;
-      if (yr % labelEvery === 0 || i === years.length - 1) {
+      // Label every Nth year, plus the last year if it's at least half a step past the previous label.
+      const isLast = i === years.length - 1;
+      if (yr % labelEvery === 0 || (isLast && yr % labelEvery >= Math.ceil(labelEvery / 2))) {
         s.append(svg("text", { class: "label", x: xc(i), y: bottom + 16, "text-anchor": "middle" }, slot < 30 ? `'${String(yr).slice(2)}` : String(yr)));
       }
     });
@@ -792,21 +797,102 @@
     fact.replaceChildren(document.createTextNode("Highest on record "), el("b", null, `${record.peakM.toFixed(2)} m`), document.createTextNode(` (${fmtDate(record.date)})`));
   }
 
+  // ---- Flood log: every time the river reached road-flooding level.
+  const PROPERTY_M = 2.03;
+  const LOG_PREVIEW = 12;
+  let logSort = "newest";
+  let logExpanded = false;
+  const fmtLogDate = (iso) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+
+  function highlightYear(year, on) {
+    const host = $("past-chart");
+    const mark = host._marks?.get(year);
+    if (!mark) return;
+    host.classList.toggle("focusing", on);
+    mark.classList.toggle("picked", on);
+  }
+
   function renderPastTable() {
     const wrap = $("past-table");
     if (wrap.hidden || !past) return;
-    const table = el("table", "data");
-    const head = el("tr");
-    head.append(el("th", null, "Date"), el("th", null, "Peak level"));
-    table.append(head);
-    for (const e of [...past.events].reverse()) {
-      const tr = el("tr");
-      tr.append(el("td", null, fmtDate(e.date)), el("td", null, `${e.peakM.toFixed(2)} m`));
-      table.append(tr);
+    const events = past.events.map((e) => ({ ...e, year: Number(e.date.slice(0, 4)) }));
+    const record = events.reduce((a, b) => (b.peakM > a.peakM ? b : a));
+    const sorted = logSort === "highest"
+      ? [...events].sort((a, b) => b.peakM - a.peakM || b.date.localeCompare(a.date))
+      : [...events].sort((a, b) => b.date.localeCompare(a.date));
+    const shown = logExpanded ? sorted : sorted.slice(0, LOG_PREVIEW);
+    // Bars run from road-flooding level (1.80 m) to the record.
+    const span = Math.max(0.1, record.peakM - past.roadFloodM);
+    const perYear = new Map();
+    for (const e of events) perYear.set(e.year, (perYear.get(e.year) || 0) + 1);
+
+    const controls = el("div", "log-controls");
+    const seg = el("div", "seg");
+    seg.setAttribute("role", "group");
+    seg.setAttribute("aria-label", "Sort floods");
+    for (const [key, label] of [["newest", "Newest first"], ["highest", "Highest first"]]) {
+      const b = el("button", null, label);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(logSort === key));
+      b.addEventListener("click", () => { if (logSort !== key) { logSort = key; renderPastTable(); } });
+      seg.append(b);
     }
-    wrap.replaceChildren(el("p", "meta", "Every time the river reached road-flooding level (1.80 m), newest first."), table);
+    controls.append(seg, el("span", "meta", `${events.length} floods since ${Math.min(...events.map((e) => e.year))}`));
+
+    const table = el("table", "floods");
+    const caption = el("caption", "sr-only", `Every time the River Isle at Donyatt reached road-flooding level (${past.roadFloodM.toFixed(2)} m), ${logSort === "highest" ? "highest first" : "newest first"}.`);
+    const thead = el("thead");
+    const hr = el("tr");
+    for (const h of ["Date", "Peak level"]) { const th = el("th", null, h); th.scope = "col"; hr.append(th); }
+    thead.append(hr);
+    const tbody = el("tbody");
+    let lastYear = null;
+    shown.forEach((e, i) => {
+      if (logSort === "newest" && e.year !== lastYear) {
+        const yr = el("tr", "year");
+        const th = el("th", null, String(e.year));
+        th.colSpan = 2;
+        th.scope = "rowgroup";
+        const n = perYear.get(e.year);
+        th.append(el("span", "year-count", `${n} ${n === 1 ? "flood" : "floods"}`));
+        yr.append(th);
+        tbody.append(yr);
+        lastYear = e.year;
+      }
+      const tr = el("tr", "flood");
+      tr.style.setProperty("--i", String(Math.min(i, 20)));
+      const date = el("td", "when");
+      date.append(el("span", "date", logSort === "newest" ? fmtLogDate(e.date) : fmtDate(e.date)));
+      if (e === record) date.append(el("span", "tag tag-record", "Record"));
+      const peak = el("td", "peak");
+      const bar = el("span", "peak-bar");
+      bar.setAttribute("aria-hidden", "true");
+      const fill = el("span", "peak-fill");
+      fill.style.setProperty("--w", `${Math.max(4, ((e.peakM - past.roadFloodM) / span) * 100)}%`);
+      // Tick at 2.03 m, where the EA says property flooding is possible.
+      const tick = el("span", "peak-tick");
+      tick.style.left = `${((PROPERTY_M - past.roadFloodM) / span) * 100}%`;
+      bar.append(fill, tick);
+      peak.append(bar, el("span", "peak-value", `${e.peakM.toFixed(2)} m`));
+      tr.append(date, peak);
+      tr.addEventListener("pointerenter", () => highlightYear(e.year, true));
+      tr.addEventListener("pointerleave", () => highlightYear(e.year, false));
+      tbody.append(tr);
+    });
+    table.append(caption, thead, tbody);
+
+    const parts = [controls, table];
+    if (sorted.length > LOG_PREVIEW) {
+      const more = el("button", "show-more", logExpanded ? "Show fewer" : `Show all ${sorted.length} floods`);
+      more.type = "button";
+      more.setAttribute("aria-expanded", String(logExpanded));
+      more.addEventListener("click", () => { logExpanded = !logExpanded; renderPastTable(); });
+      parts.push(more);
+    }
+    parts.push(el("p", "meta", `Bars show how far above road-flooding level (${past.roadFloodM.toFixed(2)} m) the river peaked, up to the record ${record.peakM.toFixed(2)} m. The tick marks ${PROPERTY_M.toFixed(2)} m, where the EA says property flooding is possible. Hover a flood to find its year on the chart.`));
+    wrap.replaceChildren(...parts);
   }
-  toggle("past-table-toggle", "past-table", renderPastTable);
+  toggle("past-table-toggle", "past-table", renderPastTable, ["Show every flood", "Hide the list"]);
 
   async function loadPast() {
     try {
