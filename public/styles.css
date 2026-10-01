@@ -367,3 +367,7 @@ table.floods tr.flood:hover { background: var(--surface-2); }
 @keyframes bar-in { from { transform: scaleX(0); } }
 .chart.focusing .bar-level { opacity: 0.3; }
 .chart.focusing .bar-level.picked { opacity: 1; }
+
+.tank-col { flex: none; }
+.tank-hint { display: none; margin: 6px 0 0; width: 110px; text-align: center; font-size: 0.72rem; color: var(--muted); }
+@media (pointer: coarse) and (prefers-reduced-motion: no-preference) { .tank-hint { display: block; } }

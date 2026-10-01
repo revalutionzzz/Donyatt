@@ -176,6 +176,8 @@
   const water = {
     built: false, y: TANK.bottom, vy: 0, target: TANK.bottom, tilt: 0, vtilt: 0, t: 0,
     rising: false, bubbles: [], running: false, onScreen: true, last: 0, nextNudge: 0,
+    // Phone motion: the surface's resting tilt follows gravity; shakes push the slosh.
+    eq: 0, gravityTilt: 0, shake: 0, motion: "off",
     front: null, back: null, bubbleLayer: null,
   };
 
@@ -206,6 +208,9 @@
     host.tabIndex = 0;
     const splash = () => slosh(9);
     host.addEventListener("pointerdown", splash);
+    // iPhones only allow motion access after a tap, so ask on the first click.
+    host.addEventListener("click", () => enableMotion(true));
+    enableMotion(false);
     host.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); splash(); } });
     new IntersectionObserver((entries) => {
       water.onScreen = entries.some((e) => e.isIntersecting);
@@ -260,7 +265,11 @@
     water.y += water.vy * dt;
     // Slosh: a damped oscillator; moving water sets it going too.
     const omega = 3.4;
-    const at = -omega * omega * water.tilt - 2 * 0.09 * omega * water.vtilt + water.vy * 0.6;
+    // The resting tilt eases towards where gravity says the surface should lie.
+    water.eq += (water.gravityTilt - water.eq) * Math.min(1, dt * 6);
+    water.vtilt += water.shake * dt;
+    water.shake *= Math.exp(-dt * 10);
+    const at = -omega * omega * (water.tilt - water.eq) - 2 * 0.09 * omega * water.vtilt + water.vy * 0.6;
     water.vtilt += at * dt;
     water.tilt += water.vtilt * dt;
     water.t += dt;
@@ -280,6 +289,58 @@
     drawWater();
     if (water.onScreen && !document.hidden) requestAnimationFrame(stepWater);
     else water.running = false;
+  }
+
+  // ---- Accelerometer: tilt the phone and the water stays level with the world; shake it to splash.
+  const MAX_TILT_DEG = 35;
+  function screenAngle() {
+    const a = (screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0;
+    return ((a % 360) + 360) % 360;
+  }
+  function onOrientation(e) {
+    if (e.gamma == null || e.beta == null) return;
+    // Sideways tilt relative to the screen as currently held.
+    const angle = screenAngle();
+    const sideways = angle === 90 ? e.beta : angle === 270 ? -e.beta : angle === 180 ? -e.gamma : e.gamma;
+    const deg = Math.max(-MAX_TILT_DEG, Math.min(MAX_TILT_DEG, sideways));
+    // Tilted right (right edge down): water piles up on the right, which is a smaller y in SVG.
+    water.gravityTilt = -Math.tan((deg * Math.PI) / 180) * (TANK.w / 2);
+    if (water.motion !== "on") { water.motion = "on"; startWater(); }
+  }
+  function onMotion(e) {
+    const a = e.acceleration;
+    if (!a || a.x == null) return;
+    const angle = screenAngle();
+    const sideways = angle === 90 ? -a.y : angle === 270 ? a.y : angle === 180 ? -a.x : a.x;
+    // Ignore sensor noise; a real shake is a few m/s².
+    if (Math.abs(sideways) > 1.2) water.shake += -sideways * 14;
+  }
+  function listenForMotion() {
+    window.addEventListener("deviceorientation", onOrientation);
+    window.addEventListener("devicemotion", onMotion);
+  }
+  function enableMotion(fromTap) {
+    if (reducedMotion || water.motion !== "off" || !("DeviceOrientationEvent" in window)) return;
+    const needsPermission = typeof DeviceOrientationEvent.requestPermission === "function";
+    if (!needsPermission) {
+      water.motion = "listening";
+      listenForMotion();
+      return;
+    }
+    // iOS: permission can only be requested from a tap, so never ask on page load.
+    if (!fromTap) return;
+    water.motion = "asking";
+    DeviceOrientationEvent.requestPermission()
+      .then((state) => {
+        if (state === "granted") {
+          listenForMotion();
+          if (typeof DeviceMotionEvent?.requestPermission === "function") DeviceMotionEvent.requestPermission().catch(() => {});
+          water.motion = "listening";
+        } else {
+          water.motion = "denied";
+        }
+      })
+      .catch(() => { water.motion = "off"; });
   }
 
   function startWater() {
