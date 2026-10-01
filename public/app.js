@@ -714,10 +714,46 @@
     wrap.replaceChildren(table);
   }
 
+  /** Forecast rain over the next `hours`, counting the current hour pro rata. */
+  function forecastRain(hours) {
+    const now = Date.parse(history.to);
+    const end = now + hours * 3_600_000;
+    let total = 0;
+    for (const [ts, mm] of history.rainForecast || []) {
+      const start = parseTime(ts);
+      total += mm * Math.max(0, Math.min(start + 3_600_000, end) - Math.max(start, now)) / 3_600_000;
+    }
+    return total;
+  }
+
+  /** Numbers for the forecast, so it reads even when the bars are empty (a dry forecast). */
+  function renderForecastSummary() {
+    const box = $("forecast-summary");
+    const fc = history.rainForecast || [];
+    if (!fc.length) {
+      box.textContent = "No rain forecast available right now.";
+      return;
+    }
+    const mm = (v) => `${v.toFixed(1)} mm`;
+    const parts = [3, 6, 12].map((h) => {
+      const span = el("span", null, `Next ${h} h `);
+      span.append(el("b", null, mm(forecastRain(h))));
+      return span;
+    });
+    const wettest = fc.reduce((a, b) => (b[1] > a[1] ? b : a));
+    const note = wettest[1] >= 0.1
+      ? `Wettest hour ${fmtTime(parseTime(wettest[0]))}–${fmtTime(parseTime(wettest[0]) + 3_600_000)}, ${mm(wettest[1])}.`
+      : "Dry: no rain forecast for the next 12 hours.";
+    const updated = history.forecastFetchedAt ? ` Forecast updated ${fmtTime(Date.parse(history.forecastFetchedAt))}.` : "";
+    const title = el("span", "fc-title", "Forecast rain at Chard");
+    box.replaceChildren(title, ...parts, el("span", "fc-note", note + updated));
+  }
+
   function drawTrend() {
     if (!history) return;
     drawLevelChart();
     drawRainChart();
+    renderForecastSummary();
     renderTrendTable();
     if (hoverIndex != null) setHover(hoverIndex);
   }
