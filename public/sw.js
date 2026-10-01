@@ -1,7 +1,7 @@
 // Donyatt Flood Watch service worker. It never serves a cached status: everything comes from the
 // network. The only thing cached is an offline page, so the app says clearly that it can't show
 // the current status instead of showing an old one.
-const CACHE = "dfw-offline-v1";
+const CACHE = "dfw-offline-v2";
 const OFFLINE = "/offline.html";
 
 self.addEventListener("install", (event) => {

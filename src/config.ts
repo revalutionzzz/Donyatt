@@ -20,7 +20,7 @@ export const INITIAL_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 export const PLAUSIBLE_LEVEL_M = { min: -0.5, max: 4 };
 
 /** Public address of the site, used in alert messages. */
-export const SITE_URL = "https://donyatt.n2hfwbmyn9.workers.dev/";
+export const SITE_URL = "https://donyattfloodwatch.co.uk/";
 
 /**
  * Open-Meteo forecast point: the Chard Snowdon Hill rain gauge (EA station 52129, ST310089).
