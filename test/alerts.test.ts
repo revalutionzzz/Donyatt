@@ -62,14 +62,12 @@ describe("Telegram alerts", () => {
     expect(JSON.parse(h.store.get(ALERT_STATE_KEY)!)["a358-donyatt"].status).toBe("open");
   });
 
-  it("send escalations at once, as one message for all roads", async () => {
+  it("send escalations at once", async () => {
     const h = await harness();
     await h.step(0, 0.3);
     const changes = await h.step(15, 1.9);
     expect(changes.map((c) => [c.roadId, c.from, c.to])).toEqual([
       ["a358-donyatt", "open", "avoid"],
-      ["b3168-ilford-bridges", "open", "avoid"],
-      ["isle-brewers-fivehead", "open", "avoid"],
     ]);
     expect(h.tg.sent).toHaveLength(1);
     const { url, body } = h.tg.sent[0];

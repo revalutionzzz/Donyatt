@@ -45,7 +45,7 @@
     avoid: "M6 12h12",
     unknown: "M9.2 9a3 3 0 1 1 4.3 2.7c-.9.4-1.5 1.1-1.5 2.1v.4M12 17.5v.01",
   };
-  const SHORT_NAMES = { "a358-donyatt": "A358", "b3168-ilford-bridges": "B3168", "isle-brewers-fivehead": "Isle Brewers road" };
+  const SHORT_NAMES = { "a358-donyatt": "A358" };
   const RANK = { open: 0, caution: 1, unknown: 2, avoid: 3 };
   const STATUS_VAR = { open: "--st-open", caution: "--st-caution", avoid: "--st-avoid", unknown: "--st-unknown" };
 
@@ -62,8 +62,11 @@
     const worst = roads.reduce((w, r) => (RANK[r.status] > RANK[w] ? r.status : w), "open");
     const same = roads.every((r) => r.status === roads[0].status);
     let text;
-    if (same) {
-      text = { open: "All three roads open", caution: "Caution on all three roads", avoid: "Avoid all three roads", unknown: "Status unknown: no recent river data" }[worst];
+    if (roads.length === 1) {
+      const name = SHORT_NAMES[roads[0].id] || roads[0].name;
+      text = { open: `${name} open`, caution: `Caution on the ${name}`, avoid: `Avoid the ${name}`, unknown: "Status unknown: no recent river data" }[worst];
+    } else if (same) {
+      text = { open: "All roads open", caution: "Caution on all roads", avoid: "Avoid all roads", unknown: "Status unknown: no recent river data" }[worst];
     } else {
       const names = roads.filter((r) => r.status === worst).map((r) => SHORT_NAMES[r.id] || r.name);
       text = `${LABELS[worst][0]}${LABELS[worst].slice(1).toLowerCase()}: ${names.join(", ")}`;

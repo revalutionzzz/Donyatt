@@ -1,12 +1,10 @@
 # Donyatt Flood Watch
 
-A free community tool for drivers near Donyatt, Somerset, UK. The River Isle regularly floods:
+A free community tool for drivers near Donyatt, Somerset, UK. The River Isle regularly floods the **A358 south of Donyatt** (a main A303 diversion, ~12,700 vehicles/day).
 
-- the **A358 south of Donyatt** (a main A303 diversion, ~12,700 vehicles/day),
-- the **B3168 at Ilford Bridges**,
-- the **Isle Brewers–Fivehead road**.
+The tool combines Environment Agency (EA) river/rain data, a flood-likelihood prediction, and crowd road reports into a recommendation for the A358: **Open / Caution / Avoid**.
 
-The tool combines Environment Agency (EA) river/rain data, a flood-likelihood prediction, and crowd road reports into a per-road recommendation: **Open / Caution / Avoid**.
+The site covers the A358 only. The B3168 at Ilford Bridges and the Isle Brewers–Fivehead road were in the original brief, but they were dropped on 2026-10-01 at the owner's request: they have no published threshold or nearby gauge, so their statuses were guesses. Old `status_log` rows and reports for them (`b3168-ilford-bridges`, `isle-brewers-fivehead`) are kept. The code still handles a list of roads (`ROADS` in `src/rules.ts`), so a road can be added back if there's evidence for a threshold.
 
 ## Stack
 
@@ -58,16 +56,15 @@ Notes:
   - EA flood warning or severe flood warning in force, or
   - level ≥ 1.80 m, or
   - level ≥ 1.50 m and projected to reach 1.80 m within 1 h plus the reading's age, or
-  - a hold after the peak (A358 1 h, downstream roads 3 h).
+  - a hold of 1 h after the peak.
 - **Caution:**
   - level ≥ 1.20 m, or
   - level ≥ 1.00 m and rising ≥ 0.10 m/h, or
   - EA flood alert, or
   - ≥ 20 mm rain in 3 h / ≥ 35 mm in 12 h at Snowdon Hill, or
   - EA warnings not checked for 60 min, or
-  - a hold (A358 1 h, downstream 6 h).
+  - a hold of 1 h.
 - **Unknown** (never Open) when the level reading is over 90 min old.
-- The downstream roads (B3168 Ilford Bridges, Isle Brewers–Fivehead) have no published threshold. They use the Donyatt gauge with longer holds, as cautious defaults to tighten with local knowledge or reports.
 - EA flood-warning times (`timeRaised` etc.) have no zone suffix. The page assumes UTC; this is unverified.
 
 ## Driver reports and learning data (Stage 3, text reports; photos in 3b)
@@ -132,7 +129,7 @@ Notes:
   - Fetched at most hourly (self-throttled via D1) from the cron, the collector backstop, `/health` and `/api/history` (when there's no fresh forecast), so the chart doesn't depend on the cron. After a failure it retries at most every 10 min.
   - Every attempt is logged in `forecast_attempts`, and `/health` shows `forecast` (latest fetch, age, last attempt and Open-Meteo's error reason).
   - Every fetch is kept in `rain_forecasts`, so forecasts can be scored against the gauge later.
-  - Unverified against a live response: the sandbox can't reach Open-Meteo, so the test fixture is synthetic, shaped from the docs.
+  - Confirmed working against the live API on 2026-10-01 (the Worker stores forecasts). The test fixture is still synthetic, shaped from the docs, because the sandbox can't reach Open-Meteo.
 - **Model** (`model/train.py`, exported to `src/model/flood-model.json`, evaluated by `src/predict.ts`):
   - Logistic regression for P(Donyatt ≥ 1.80 m within 3 h / 6 h), hourly samples below 1.80 m.
   - Features: level, rise over 1 h / 3 h, log1p of Chard rain over 1/3/6/24/72 h, and (forecast variant) log1p of forecast rain over the next 6 h.

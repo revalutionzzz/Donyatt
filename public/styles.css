@@ -94,7 +94,6 @@ main { max-width: 960px; margin: -36px auto 0; padding: 0 16px 40px; position: r
 
 /* ---------- Road cards ---------- */
 .roads { display: grid; gap: 14px; grid-template-columns: 1fr; margin-bottom: 16px; }
-@media (min-width: 760px) { .roads { grid-template-columns: repeat(3, 1fr); } }
 .road {
   background: var(--surface); border-radius: 16px; box-shadow: var(--shadow);
   padding: 16px; position: relative; overflow: hidden;

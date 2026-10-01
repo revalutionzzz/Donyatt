@@ -130,9 +130,9 @@ describe("reports in the road status", () => {
     expect(a358(inputs({ levels: [], reports: [report("do_not_attempt", 1), report("do_not_attempt", 2)] })).status).toBe("avoid");
   });
 
-  it("only affects the road reported", () => {
-    const report2 = computeStatus(inputs({ reports: [report("do_not_attempt", 1), report("do_not_attempt", 2)] }));
-    expect(report2.roads.map((r) => r.status)).toEqual(["avoid", "open", "open"]);
+  it("ignores reports for roads we no longer cover", () => {
+    const old = [report("do_not_attempt", 1, "b3168-ilford-bridges"), report("do_not_attempt", 2, "b3168-ilford-bridges")];
+    expect(computeStatus(inputs({ reports: old })).roads.map((r) => r.status)).toEqual(["open"]);
   });
 });
 
@@ -151,7 +151,7 @@ describe("status log", () => {
       const reports: DriverReport[] = care ? [{ roadId: "a358-donyatt", kind: "care", createdAt: minsAgo(5, now) }] : [];
       return computeStatus(inputs({ now, levels, rain: [], warningsCheckedAt: minsAgo(5, now), reports }));
     };
-    expect(await logStatus(d1, snapshotAt(0))).toBe(3);
+    expect(await logStatus(d1, snapshotAt(0))).toBe(1);
     expect(await logStatus(d1, snapshotAt(15))).toBe(0);
     await logStatus(d1, snapshotAt(30, true));
     expect(await logStatus(d1, snapshotAt(45, true))).toBe(0);
@@ -224,17 +224,16 @@ describe("POST /api/reports", () => {
     const { env, f } = await setup();
     expect((await postReport(post(good()), env, API_NOW, f.fn)).status).toBe(201);
     expect((await postReport(post(good({ kind: "clear" })), env, new Date(API_NOW.getTime() + 5 * 60_000), f.fn)).status).toBe(429);
-    // Another road is fine, and the same road after 10 minutes is fine.
-    expect((await postReport(post(good({ roadId: "b3168-ilford-bridges" })), env, new Date(API_NOW.getTime() + 6 * 60_000), f.fn)).status).toBe(201);
+    // A road we don't cover is refused; the same road after 10 minutes is fine.
+    expect((await postReport(post(good({ roadId: "b3168-ilford-bridges" })), env, new Date(API_NOW.getTime() + 6 * 60_000), f.fn)).status).toBe(400);
     expect((await postReport(post(good()), env, new Date(API_NOW.getTime() + 11 * 60_000), f.fn)).status).toBe(201);
   });
 
   it("caps reports per device per day", async () => {
     const { env, f } = await setup();
-    const roads = ["a358-donyatt", "b3168-ilford-bridges", "isle-brewers-fivehead"];
     for (let i = 0; i < LIMITS.perDevicePerDay; i++) {
       const at = new Date(API_NOW.getTime() + i * 11 * 60_000);
-      expect((await postReport(post(good({ roadId: roads[i % 3] })), env, at, f.fn)).status).toBe(201);
+      expect((await postReport(post(good({ roadId: "a358-donyatt" })), env, at, f.fn)).status).toBe(201);
     }
     const res = await postReport(post(good({ roadId: "a358-donyatt" })), env, new Date(API_NOW.getTime() + 3 * 3_600_000), f.fn);
     expect(res.status).toBe(429);

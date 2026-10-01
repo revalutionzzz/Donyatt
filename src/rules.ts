@@ -55,9 +55,8 @@ export interface Road {
   cautionHoldHours: number;
 }
 
-// The two downstream roads have no published EA threshold. They use the Donyatt gauge with
-// longer holds (floods at Donyatt stayed above 1.80 m for 3-10 h and above 1.20 m for 4-15 h
-// in recent events). These holds are cautious defaults, to be tightened with local knowledge.
+// Only the A358: it floods most often and is the road the Donyatt gauge and its 1.80 m threshold
+// describe. (Downstream roads were dropped on 2026-10-01: no published threshold or gauge.)
 export const ROADS: Road[] = [
   {
     id: "a358-donyatt",
@@ -65,20 +64,6 @@ export const ROADS: Road[] = [
     where: "Main A303 diversion, by the River Isle at Donyatt",
     avoidHoldHours: 1,
     cautionHoldHours: 1,
-  },
-  {
-    id: "b3168-ilford-bridges",
-    name: "B3168 at Ilford Bridges",
-    where: "Downstream of the Donyatt gauge",
-    avoidHoldHours: 3,
-    cautionHoldHours: 6,
-  },
-  {
-    id: "isle-brewers-fivehead",
-    name: "Isle Brewers – Fivehead road",
-    where: "Downstream of the Donyatt gauge, in the EA warning area",
-    avoidHoldHours: 3,
-    cautionHoldHours: 6,
   },
 ];
 
