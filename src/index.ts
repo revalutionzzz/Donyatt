@@ -1,3 +1,4 @@
+import { alertSender } from "./alerts";
 import { fillHistory, runCollector } from "./collector";
 import { loadHistory } from "./history";
 import { adminReports, apiConfig, getPhoto, postReport, type ReportsEnv } from "./reportsApi";
@@ -47,7 +48,7 @@ export async function health(env: Env, now = Date.now(), fetchFn: typeof fetch =
   const cronLooksHealthy = outcome.lastRunAgeMs < STALE_RUN_MS;
   if (!outcome.ran) return json({ ...data, cronLooksHealthy });
 
-  if (env.STATUS) await refreshStatus(env.DB, env.STATUS, new Date(now)).catch(() => undefined);
+  if (env.STATUS) await refreshStatus(env.DB, env.STATUS, new Date(now), alertSender(env, fetchFn)).catch(() => undefined);
   return json({
     ...(await snapshot(env.DB).catch(() => data)),
     cronLooksHealthy,
@@ -58,7 +59,7 @@ export async function health(env: Env, now = Date.now(), fetchFn: typeof fetch =
 
 export async function apiStatus(env: Env, now = Date.now(), fetchFn: typeof fetch = fetch): Promise<Response> {
   try {
-    return json(await getStatus(env.DB, env.STATUS, now, fetchFn), 200, "public, max-age=60");
+    return json(await getStatus(env.DB, env.STATUS, now, fetchFn, alertSender(env, fetchFn)), 200, "public, max-age=60");
   } catch (err) {
     console.error("Status failed:", errorMessage(err));
     return json({ error: "Status is unavailable right now. Never drive into floodwater." }, 503);
@@ -116,7 +117,7 @@ export default {
         }
         // Refresh the status even if collection failed, so stale data is reported as such.
         try {
-          await refreshStatus(env.DB, env.STATUS);
+          await refreshStatus(env.DB, env.STATUS, new Date(), alertSender(env));
         } catch (err) {
           console.error("Status refresh failed:", errorMessage(err));
         }

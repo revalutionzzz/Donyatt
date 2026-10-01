@@ -112,6 +112,19 @@ Notes:
 - **Effect on status:** a report with a visible photo weighs ×1.5, so one "Do not attempt" with a checked photo means Avoid.
 - **Cost guard:** 300 photos a day site-wide. After that, reports are still accepted, without photos.
 
+## Telegram alerts (Stage 4; built, off until the bot secrets exist)
+
+- **Switching on:** add Worker secrets `TELEGRAM_BOT_TOKEN` (from @BotFather) and `TELEGRAM_CHAT_ID` (e.g. `@channelname` for a public channel with the bot as admin). Check them with "Send test alert" on `/admin.html` (`POST /api/admin/alerts/test`).
+- **Where it runs** (`src/alerts.ts`): `processAlerts` runs inside `refreshStatus` after the status log, so a change from any path (cron, request backstop, report, moderation) is announced straight away. Alert failures never block the status.
+- **When it sends:**
+  - Escalations (to Caution or Avoid) go out at once.
+  - Easing, and Unknown, go out only after holding for `ALERTS.holdMinutes` (30), so a river hovering at a threshold doesn't spam people.
+  - The first run after switch-on records statuses silently.
+  - Several roads changing together go out as one message.
+- **State:** the last announced status per road is kept in KV (`alerts:state:v1`). A failed send leaves it unchanged, so the next refresh retries.
+- **Record:** every attempt goes into `alerts_sent`.
+- **Message text:** HTML-escaped, always ends with "Never drive into floodwater" and the site link, and never says "safe".
+
 ## Product rules (non-negotiable)
 
 - Never describe a road as "safe". Use Open / Caution / Avoid and "never drive into floodwater" messaging.

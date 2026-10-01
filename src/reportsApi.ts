@@ -1,3 +1,4 @@
+import { alertSender, sendTelegram } from "./alerts";
 import { JpegError, stripJpegMetadata } from "./jpeg";
 import { REPORT_KINDS, VISIBLE_PHOTO_SQL, type ReportKind } from "./reports";
 import { PHOTOS, ROADS } from "./rules";
@@ -15,6 +16,9 @@ export interface ReportsEnv {
   ADMIN_TOKEN?: string;
   /** R2 bucket donyatt-photos. Photos are off until the binding is added to wrangler.toml. */
   PHOTOS?: R2Bucket;
+  /** Telegram alerts (Worker secrets). Off until both exist. */
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
 }
 
 export const LIMITS = {
@@ -165,7 +169,7 @@ export async function postReport(request: Request, env: ReportsEnv, now = new Da
   }
 
   // Snapshot of what we knew when the report was made.
-  const status: StatusReport = await getStatus(env.DB, env.STATUS, now.getTime(), fetchFn);
+  const status: StatusReport = await getStatus(env.DB, env.STATUS, now.getTime(), fetchFn, alertSender(env, fetchFn));
   const shown = status.roads.find((r) => r.id === body.roadId)?.status ?? null;
   const worstWarning = status.warnings.length ? Math.min(...status.warnings.map((w) => w.severityLevel)) : null;
   const inserted = await env.DB
@@ -182,7 +186,7 @@ export async function postReport(request: Request, env: ReportsEnv, now = new Da
   if (photo) photoNote = await storePhoto(env, Number(inserted.meta.last_row_id), photo, dayStart);
 
   // Count it straight away.
-  const updated = await refreshStatus(env.DB, env.STATUS, now);
+  const updated = await refreshStatus(env.DB, env.STATUS, now, alertSender(env, fetchFn));
   return json({ ok: true, road: updated.roads.find((r) => r.id === body.roadId), photoNote }, 201);
 }
 
@@ -258,6 +262,17 @@ export async function adminReports(request: Request, env: ReportsEnv, pathname: 
     return json({ reports: results });
   }
 
+  if (request.method === "POST" && pathname === "/api/admin/alerts/test") {
+    const sender = alertSender(env);
+    if (!sender) return json({ error: "Alerts aren't set up: add the TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID secrets." }, 400);
+    try {
+      await sendTelegram(sender, "✅ Test message from Donyatt Flood Watch. Alerts are working.");
+      return json({ ok: true });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : String(err) }, 502);
+    }
+  }
+
   const photoView = /^\/api\/admin\/photos\/(\d+)$/.exec(pathname);
   if (request.method === "GET" && photoView) {
     if (!env.PHOTOS) return json({ error: "Photos aren't switched on." }, 404);
@@ -278,7 +293,7 @@ export async function adminReports(request: Request, env: ReportsEnv, pathname: 
       if (row.key && env.PHOTOS) await env.PHOTOS.delete(row.key);
       await env.DB.prepare("UPDATE reports SET photo_state = 'rejected', photo_key = NULL WHERE id = ?").bind(id).run();
     }
-    await refreshStatus(env.DB, env.STATUS, now);
+    await refreshStatus(env.DB, env.STATUS, now, alertSender(env));
     return json({ ok: true });
   }
 
@@ -297,7 +312,7 @@ export async function adminReports(request: Request, env: ReportsEnv, pathname: 
       .bind(hide ? 1 : 0, hide ? reason : null, Number(m[1]))
       .run();
     if (!res.meta.changes) return json({ error: "No such report." }, 404);
-    await refreshStatus(env.DB, env.STATUS, now);
+    await refreshStatus(env.DB, env.STATUS, now, alertSender(env));
     return json({ ok: true });
   }
   return json({ error: "Not found" }, 404);

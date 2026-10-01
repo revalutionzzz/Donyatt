@@ -11,3 +11,4 @@ Project brief and rules: [CLAUDE.md](CLAUDE.md).
 - Site: live status cards, an animated river gauge, 24 h / 48 h / 7 day level and rain charts, and a chart of every flood since the 1990s.
 - Stage 3 (reports, text): drivers report Clear / Passable with care / Do not attempt. Reports fade over 3 hours, only ever make a road stricter, and are kept anonymously with a snapshot for learning. They're switched off until the Turnstile keys are set.
 - Stage 3b (photos): an optional photo with a report. Location data is stripped, and the photo is hidden until checked or confirmed, then deleted after 2 days. Switched off until the R2 bucket exists.
+- Stage 4 (alerts): a Telegram channel post when a road's status changes. Escalations are sent at once; easing waits 30 minutes to avoid flapping. Switched off until the bot secrets are set.

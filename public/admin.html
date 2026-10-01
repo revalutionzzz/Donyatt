@@ -27,6 +27,12 @@
     <p class="meta" id="msg"></p>
   </section>
   <section class="panel">
+    <h2>Telegram alerts</h2>
+    <p class="meta">Sends a test message to the alerts channel, to check the bot token and chat ID secrets.</p>
+    <button class="act" type="button" id="test-alert">Send test alert</button>
+    <p class="meta" id="alert-msg"></p>
+  </section>
+  <section class="panel">
     <h2>Last 14 days</h2>
     <div class="table-wrap" style="max-height:none"><table class="data" id="list"></table></div>
   </section>
@@ -107,6 +113,11 @@
     token = $("token").value.trim();
     sessionStorage.setItem("dfw-admin", token);
     load();
+  });
+  $("test-alert").addEventListener("click", async () => {
+    $("alert-msg").textContent = "Sending…";
+    try { await api("/api/admin/alerts/test", "POST", {}); $("alert-msg").textContent = "Sent. Check the channel."; }
+    catch (err) { $("alert-msg").textContent = err.message; }
   });
   if (token) load();
 })();

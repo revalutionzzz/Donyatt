@@ -1,3 +1,4 @@
+import { processAlerts, type AlertSender } from "./alerts";
 import { runCollector, type CollectorResult } from "./collector";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
 import { VISIBLE_PHOTO_SQL, type DriverReport } from "./reports";
@@ -75,11 +76,13 @@ export async function loadStatusInputs(db: D1Database, now: Date): Promise<Statu
 }
 
 /** Recompute the road status from D1 and cache it in KV. */
-export async function refreshStatus(db: D1Database, kv: KVNamespace, now = new Date()): Promise<StatusReport> {
+export async function refreshStatus(db: D1Database, kv: KVNamespace, now = new Date(), alerts?: AlertSender): Promise<StatusReport> {
   const report = computeStatus(await loadStatusInputs(db, now));
   await kv.put(STATUS_KV_KEY, JSON.stringify(report));
   // History for learning; a logging failure must never block the live status.
   await logStatus(db, report).catch((err) => console.error("Status log failed:", err instanceof Error ? err.message : err));
+  // Alerts likewise must never block the status.
+  if (alerts) await processAlerts(db, kv, report, alerts).catch((err) => console.error("Alerts failed:", err instanceof Error ? err.message : err));
   return report;
 }
 
@@ -115,9 +118,10 @@ export async function getStatus(
   kv: KVNamespace,
   now = Date.now(),
   fetchFn: typeof fetch = fetch,
+  alerts?: AlertSender,
 ): Promise<StatusReport> {
   const cached = await kv.get<StatusReport>(STATUS_KV_KEY, "json");
   if (cached && now - Date.parse(cached.generatedAt) < STALE_RUN_MS) return cached;
   await runCollectorIfStale(db, now, fetchFn);
-  return refreshStatus(db, kv, new Date(now));
+  return refreshStatus(db, kv, new Date(now), alerts);
 }

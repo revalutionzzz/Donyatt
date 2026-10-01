@@ -109,3 +109,10 @@ export const PHOTOS = {
   /** Another report of the same kind for the same road, from a different device, within this window. */
   corroborateMinutes: 60,
 };
+
+/**
+ * Telegram alerts (Stage 4). Escalations (to Caution or Avoid) are sent at once. Anything else
+ * (easing, or Unknown) is sent only once the new status has held this long, so a river hovering
+ * around a threshold doesn't spam subscribers.
+ */
+export const ALERTS = { holdMinutes: 30 };
