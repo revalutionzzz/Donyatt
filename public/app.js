@@ -57,7 +57,6 @@
   }
 
   let lastStatus = null;
-  let firstStatusRender = true;
 
   function renderSummary(roads) {
     const worst = roads.reduce((w, r) => (RANK[r.status] > RANK[w] ? r.status : w), "open");
@@ -73,16 +72,45 @@
     $("summary-dot").style.background = `var(${STATUS_VAR[worst]})`;
   }
 
+  // Road cards are updated in place (not rebuilt), so a status change can fade between colours.
+  const cards = new Map();
+  function buildCard(road) {
+    const card = el("article", "road");
+    const chip = el("div", "chip");
+    const chipIcon = el("span", "chip-icon");
+    const chipText = el("span");
+    chip.append(chipIcon, chipText);
+    const headline = el("p", "headline");
+    const ul = el("ul");
+    const extras = el("div", "extras");
+    card.append(el("h2", null, road.name), el("p", "where", road.where), chip, headline, ul, extras);
+    const parts = { card, chip, chipIcon, chipText, headline, ul, extras, status: null, road };
+    cards.set(road.id, parts);
+    return parts;
+  }
+
   function renderRoads(roads) {
-    const cards = roads.map((road) => {
-      const card = el("article", `road s-${road.status}`);
-      if (!firstStatusRender) card.style.animation = "none";
-      const chip = el("div", "chip");
-      chip.append(icon(road.status), document.createTextNode(LABELS[road.status] || road.status.toUpperCase()));
-      const headline = road.headline.replace(/^[A-Za-z]+: (.)/, (_, c) => c.toUpperCase());
-      const ul = el("ul");
-      for (const reason of road.reasons) ul.append(el("li", null, reason));
-      card.append(el("h2", null, road.name), el("p", "where", road.where), chip, el("p", "headline", headline), ul);
+    const host = $("roads");
+    roads.forEach((road, i) => {
+      const p = cards.get(road.id) || buildCard(road);
+      p.road = road;
+      if (host.children[i] !== p.card) host.insertBefore(p.card, host.children[i] || null);
+      if (p.status !== road.status) {
+        p.card.className = `road s-${road.status}`;
+        p.chipIcon.replaceChildren(icon(road.status));
+        p.chipText.textContent = LABELS[road.status] || road.status.toUpperCase();
+        // A change after the first render gets a brief highlight.
+        if (p.status !== null && !reducedMotion) {
+          p.card.classList.add("changed");
+          setTimeout(() => p.card.classList.remove("changed"), 1600);
+        }
+        p.status = road.status;
+      }
+      p.headline.textContent = road.headline.replace(/^[A-Za-z]+: (.)/, (_, c) => c.toUpperCase());
+      const reasons = road.reasons.map((reason) => el("li", null, reason));
+      p.ul.replaceChildren(...reasons);
+
+      const extras = [];
       // Every report shows its age.
       const recent = (road.reports?.recent || []).slice(0, 3);
       if (recent.length) {
@@ -93,7 +121,7 @@
           pill.append(el("span", "pill-dot"), document.createTextNode(`${REPORT_LABELS[r.kind]} · ${r.ageMinutes < 1 ? "just now" : `${r.ageMinutes} min ago`}`));
           list.append(pill);
         }
-        card.append(list);
+        extras.push(list);
         const withPhoto = (road.reports?.recent || []).find((r) => r.photoId != null);
         if (withPhoto) {
           const a = el("a", "road-photo");
@@ -105,61 +133,190 @@
           img.loading = "lazy";
           img.alt = `Photo from a driver: ${REPORT_LABELS[withPhoto.kind]}`;
           a.append(img, el("span", null, `Driver photo · ${withPhoto.ageMinutes < 1 ? "just now" : `${withPhoto.ageMinutes} min ago`}`));
-          card.append(a);
+          extras.push(a);
         }
       }
       if (config.reportsEnabled) {
         const btn = el("button", "report-btn", "Report conditions");
         btn.type = "button";
-        btn.addEventListener("click", () => openReport(road));
-        card.append(btn);
+        btn.addEventListener("click", () => openReport(p.road));
+        extras.push(btn);
       }
-      return card;
+      p.extras.replaceChildren(...extras);
     });
-    $("roads").replaceChildren(...cards);
+    // Drop anything else (an old error message, or a road no longer listed).
+    const keep = new Set(roads.map((r) => cards.get(r.id).card));
+    for (const child of [...host.children]) if (!keep.has(child)) child.remove();
   }
 
-  // Animated water column. Scale 0..2.8 m.
-  const TANK = { w: 92, h: 240, top: 10, bottom: 230, max: 2.8 };
+  // ---- Numbers that glide to their new value.
+  const easeOut = (t) => 1 - (1 - t) ** 3;
+  function countTo(node, to, { decimals = 2, suffix = null, duration = 900 } = {}) {
+    const from = Number.isFinite(node._value) ? node._value : 0;
+    node._value = to;
+    const paint = (v) => {
+      if (suffix) node.replaceChildren(document.createTextNode(v.toFixed(decimals)), el("small", null, suffix));
+      else node.textContent = v.toFixed(decimals);
+    };
+    if (reducedMotion || from === to) return paint(to);
+    const start = performance.now();
+    const step = (now) => {
+      const k = Math.min(1, (now - start) / duration);
+      paint(from + (to - from) * easeOut(k));
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // ---- River gauge: water that rises on a spring and sloshes.
+  // Scale 0..2.8 m. The surface is redrawn each frame from a damped "slosh" (tilt) plus two
+  // travelling ripples; level changes and taps kick the slosh. Runs only while on screen.
+  const TANK = { w: 110, h: 260, top: 10, bottom: 250, max: 2.8, inset: 3 };
   const tankY = (m) => TANK.bottom - (Math.min(Math.max(m, 0), TANK.max) / TANK.max) * (TANK.bottom - TANK.top);
-  let tankBuilt = false;
-  function renderTank(level) {
+  const water = {
+    built: false, y: TANK.bottom, vy: 0, target: TANK.bottom, tilt: 0, vtilt: 0, t: 0,
+    rising: false, bubbles: [], running: false, onScreen: true, last: 0, nextNudge: 0,
+    front: null, back: null, bubbleLayer: null,
+  };
+
+  function buildTank() {
     const host = $("tank");
-    if (!tankBuilt) {
-      const s = svg("svg", { viewBox: `0 0 ${TANK.w} ${TANK.h}` });
-      const defs = svg("defs");
-      const grad = svg("linearGradient", { id: "water-grad", x1: 0, y1: 0, x2: 0, y2: 1 });
-      grad.append(svg("stop", { offset: "0", "stop-color": "var(--water-1)" }), svg("stop", { offset: "1", "stop-color": "var(--water-2)" }));
-      const clip = svg("clipPath", { id: "tank-clip" });
-      clip.append(svg("rect", { x: 2, y: TANK.top, width: TANK.w - 4, height: TANK.bottom - TANK.top, rx: 14 }));
-      defs.append(grad, clip);
-      s.append(defs, svg("rect", { x: 2, y: TANK.top, width: TANK.w - 4, height: TANK.bottom - TANK.top, rx: 14, fill: "var(--surface-2)", stroke: "var(--axis)" }));
-      const water = svg("g", { class: "water", "clip-path": "url(#tank-clip)" });
-      const wave = (cls, amp, opacity) =>
-        svg("path", { class: cls, fill: "url(#water-grad)", opacity, d: `M-40 ${amp} q20 -${amp} 40 0 t40 0 t40 0 t40 0 t40 0 V400 H-40 z` });
-      water.append(wave("wave-b", 6, 0.5), wave("wave-a", 4, 1));
-      water.id = "tank-water";
-      s.append(water);
-      for (const [m, cls, label] of [[1.2, "--st-caution", "1.2"], [1.8, "--st-avoid", "1.8"]]) {
-        s.append(svg("line", { x1: 2, x2: TANK.w - 2, y1: tankY(m), y2: tankY(m), stroke: `var(${cls})`, "stroke-width": 1.5, "stroke-dasharray": "4 3" }));
-        s.append(svg("text", { x: TANK.w - 8, y: tankY(m) - 4, "text-anchor": "end", "font-size": 10, "font-weight": 700, fill: "var(--ink-2)", "paint-order": "stroke", stroke: "var(--surface)", "stroke-width": 3 }, label));
-      }
-      host.replaceChildren(s);
-      // Start empty so the first reading fills up.
-      $("tank-water").style.transform = `translateY(${TANK.bottom}px)`;
-      tankBuilt = true;
+    const { w, top, bottom, inset } = TANK;
+    const s = svg("svg", { viewBox: `0 0 ${w} ${TANK.h}` });
+    const defs = svg("defs");
+    const grad = svg("linearGradient", { id: "water-grad", x1: 0, y1: 0, x2: 0, y2: 1 });
+    grad.append(svg("stop", { offset: "0", "stop-color": "var(--water-1)" }), svg("stop", { offset: "1", "stop-color": "var(--water-2)" }));
+    const glass = svg("linearGradient", { id: "glass-grad", x1: 0, y1: 0, x2: 1, y2: 0 });
+    glass.append(svg("stop", { offset: "0", "stop-color": "#fff", "stop-opacity": 0 }), svg("stop", { offset: "0.25", "stop-color": "#fff", "stop-opacity": 0.22 }), svg("stop", { offset: "0.45", "stop-color": "#fff", "stop-opacity": 0 }));
+    const clip = svg("clipPath", { id: "tank-clip" });
+    clip.append(svg("rect", { x: inset, y: top, width: w - 2 * inset, height: bottom - top, rx: 16 }));
+    defs.append(grad, glass, clip);
+    s.append(defs, svg("rect", { x: inset, y: top, width: w - 2 * inset, height: bottom - top, rx: 16, fill: "var(--surface-2)" }));
+    const g = svg("g", { "clip-path": "url(#tank-clip)" });
+    water.back = svg("path", { fill: "url(#water-grad)", opacity: 0.45 });
+    water.front = svg("path", { fill: "url(#water-grad)" });
+    water.bubbleLayer = svg("g", { fill: "#fff", "fill-opacity": 0.55 });
+    g.append(water.back, water.front, water.bubbleLayer, svg("rect", { x: inset, y: top, width: w - 2 * inset, height: bottom - top, fill: "url(#glass-grad)" }));
+    s.append(g, svg("rect", { x: inset, y: top, width: w - 2 * inset, height: bottom - top, rx: 16, fill: "none", stroke: "var(--axis)" }));
+    for (const [m, cls, label] of [[1.2, "--st-caution", "1.2 m"], [1.8, "--st-avoid", "1.8 m"]]) {
+      s.append(svg("line", { x1: inset, x2: w - inset, y1: tankY(m), y2: tankY(m), stroke: `var(${cls})`, "stroke-width": 1.5, "stroke-dasharray": "4 3" }));
+      s.append(svg("text", { x: w - 9, y: tankY(m) - 5, "text-anchor": "end", "font-size": 10, "font-weight": 700, fill: "var(--ink-2)", "paint-order": "stroke", stroke: "var(--surface)", "stroke-width": 3 }, label));
     }
-    host.setAttribute("aria-label", level == null ? "River level unavailable" : `River level ${level.toFixed(2)} metres`);
-    const y = level == null ? TANK.bottom : tankY(level) - 4;
-    requestAnimationFrame(() => requestAnimationFrame(() => { $("tank-water").style.transform = `translateY(${y}px)`; }));
+    host.replaceChildren(s);
+    host.tabIndex = 0;
+    const splash = () => slosh(9);
+    host.addEventListener("pointerdown", splash);
+    host.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); splash(); } });
+    new IntersectionObserver((entries) => {
+      water.onScreen = entries.some((e) => e.isIntersecting);
+      startWater();
+    }).observe(host);
+    document.addEventListener("visibilitychange", startWater);
+    water.built = true;
+  }
+
+  function slosh(strength) {
+    water.vtilt += strength * (water.vtilt >= 0 ? 1 : -1) * (0.8 + Math.random() * 0.4);
+    startWater();
+  }
+
+  function drawWater() {
+    const { w, inset } = TANK;
+    const left = inset - 2;
+    const right = w - inset + 2;
+    const n = 22;
+    const surface = (phase, amp) => {
+      let d = "";
+      for (let i = 0; i <= n; i++) {
+        const x = left + ((right - left) * i) / n;
+        const rel = (x - w / 2) / (w / 2);
+        const y = water.y + water.tilt * rel
+          + amp * (2.2 * Math.sin(x * 0.085 + water.t * 2.1 + phase) + 1.3 * Math.sin(x * 0.19 - water.t * 3.4 + phase * 1.7));
+        d += `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(2)}`;
+      }
+      return `${d}L${right} ${TANK.h + 20}L${left} ${TANK.h + 20}Z`;
+    };
+    water.front.setAttribute("d", surface(0, 1));
+    water.back.setAttribute("d", surface(2.4, 1.3));
+    // Bubbles while the river is rising.
+    const kids = water.bubbleLayer.children;
+    water.bubbles.forEach((b, i) => {
+      let c = kids[i];
+      if (!c) { c = svg("circle"); water.bubbleLayer.append(c); }
+      c.setAttribute("cx", b.x.toFixed(1));
+      c.setAttribute("cy", b.y.toFixed(1));
+      c.setAttribute("r", b.r);
+    });
+    while (kids.length > water.bubbles.length) kids[kids.length - 1].remove();
+  }
+
+  function stepWater(now) {
+    const dt = Math.min(0.05, (now - water.last) / 1000 || 0.016);
+    water.last = now;
+    // Level: a slightly under-damped spring towards the target, so it settles with a gentle bob.
+    const k = 9;
+    const ay = k * (water.target - water.y) - 2 * Math.sqrt(k) * 0.75 * water.vy;
+    water.vy += ay * dt;
+    water.y += water.vy * dt;
+    // Slosh: a damped oscillator; moving water sets it going too.
+    const omega = 3.4;
+    const at = -omega * omega * water.tilt - 2 * 0.09 * omega * water.vtilt + water.vy * 0.6;
+    water.vtilt += at * dt;
+    water.tilt += water.vtilt * dt;
+    water.t += dt;
+    // An occasional small nudge so it always looks like water, not a still image.
+    if (now > water.nextNudge) {
+      water.vtilt += (Math.random() - 0.5) * 6;
+      water.nextNudge = now + 4000 + Math.random() * 5000;
+    }
+    if (water.rising && water.bubbles.length < 7 && Math.random() < dt * 2.2) {
+      water.bubbles.push({ x: 12 + Math.random() * (TANK.w - 24), y: TANK.bottom - 4, r: 1.2 + Math.random() * 2, v: 18 + Math.random() * 22, wob: Math.random() * 6 });
+    }
+    for (const b of water.bubbles) {
+      b.y -= b.v * dt;
+      b.x += Math.sin(water.t * 3 + b.wob) * 0.25;
+    }
+    water.bubbles = water.bubbles.filter((b) => b.y > water.y + 4);
+    drawWater();
+    if (water.onScreen && !document.hidden) requestAnimationFrame(stepWater);
+    else water.running = false;
+  }
+
+  function startWater() {
+    if (!water.built) return;
+    if (reducedMotion) {
+      water.y = water.target;
+      water.tilt = 0;
+      water.bubbles = [];
+      drawWater();
+      return;
+    }
+    if (water.running || !water.onScreen || document.hidden) return;
+    water.running = true;
+    water.last = performance.now();
+    requestAnimationFrame(stepWater);
+  }
+
+  function renderTank(level, trend) {
+    if (!water.built) buildTank();
+    const host = $("tank");
+    host.setAttribute("aria-label", level == null ? "River level unavailable" : `River level ${level.toFixed(2)} metres. Tap to make the water slosh.`);
+    const target = level == null ? TANK.bottom : tankY(level) - 3;
+    const change = Math.abs(target - water.target);
+    water.target = target;
+    water.rising = trend === "rising";
+    // A new level makes a splash in proportion to the change.
+    if (change > 0.5) slosh(Math.min(14, 4 + change * 0.6));
+    startWater();
   }
 
   function renderRiver(river) {
     const fig = $("level-figure");
     if (river.levelM == null) {
+      fig._value = undefined;
       fig.textContent = "–";
     } else {
-      fig.replaceChildren(document.createTextNode(river.levelM.toFixed(2)), el("small", null, "m"));
+      countTo(fig, river.levelM, { decimals: 2, suffix: "m" });
     }
     const arrows = { rising: "↑ Rising", falling: "↓ Falling", steady: "→ Steady" };
     let trend = arrows[river.trend] || "";
@@ -168,7 +325,12 @@
     }
     $("trend").textContent = trend;
     $("reading-age").textContent = river.readingAt ? `Environment Agency reading from ${ago(river.readingAt)} (${fmtTime(parseTime(river.readingAt))})` : "No reading available";
-    renderTank(river.levelM);
+    renderTank(river.levelM, river.trend);
+  }
+
+  // Swap only the band class, keeping any animation classes on the panel.
+  function setBand(panel, band) {
+    for (const b of ["none", "low", "elevated", "high"]) panel.classList.toggle(`b-${b}`, b === band);
   }
 
   function renderOutlook(r) {
@@ -176,13 +338,13 @@
     const panel = $("outlook");
     const pct = (p) => (p < 0.01 ? "<1%" : `${Math.round(p * 100)}%`);
     if (!o) {
-      panel.className = "panel outlook b-none";
+      setBand(panel, "none");
       $("outlook-band").textContent = "Unavailable";
       $("outlook-detail").textContent = "Not enough recent river or rain data to make a prediction.";
       $("outlook-meter-fill").style.width = "0%";
       return;
     }
-    panel.className = `panel outlook b-${o.band}`;
+    setBand(panel, o.band);
     $("outlook-band").textContent = { low: "Low", elevated: "Elevated", high: "High" }[o.band];
     $("outlook-p6").textContent = pct(o.p6h);
     $("outlook-p3").textContent = pct(o.p3h);
@@ -212,7 +374,6 @@
     const problems = $("problems");
     problems.hidden = !r.dataProblems.length;
     problems.textContent = r.dataProblems.join(" ");
-    firstStatusRender = false;
   }
 
   async function loadStatus() {
@@ -836,6 +997,29 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => { drawTrend(); if (pastAnimated) drawPast(); }, 150);
   });
+
+  // Panels ease in as they scroll into view (not under reduced motion; never hides content without JS).
+  // Anything at or above the bottom of the viewport is revealed, so a fast fling or a reload
+  // part-way down the page can never leave a panel hidden.
+  if (!reducedMotion) {
+    const pending = new Set(document.querySelectorAll("main .panel"));
+    for (const panel of pending) panel.classList.add("reveal");
+    let queued = false;
+    const check = () => {
+      queued = false;
+      for (const panel of pending) {
+        if (panel.getBoundingClientRect().top < window.innerHeight - 30) {
+          panel.classList.add("in");
+          pending.delete(panel);
+        }
+      }
+      if (!pending.size) window.removeEventListener("scroll", onScroll);
+    };
+    const onScroll = () => { if (!queued) { queued = true; requestAnimationFrame(check); } };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    requestAnimationFrame(check);
+  }
 
   loadConfig().then(() => { if (lastStatus) renderRoads(lastStatus.roads); });
   loadStatus();
