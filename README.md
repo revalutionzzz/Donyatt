@@ -10,3 +10,4 @@ Project brief and rules: [CLAUDE.md](CLAUDE.md).
 - Stage 2 (status): Open / Caution / Avoid for each road at `/`, JSON at `/api/status`. The rules are in `src/rules.ts`, with the evidence in `model/reports/flood_events.md`.
 - Site: live status cards, an animated river gauge, 24 h / 48 h / 7 day level and rain charts, and a chart of every flood since the 1990s.
 - Stage 3 (reports, text): drivers report Clear / Passable with care / Do not attempt. Reports fade over 3 hours, only ever make a road stricter, and are kept anonymously with a snapshot for learning. They're switched off until the Turnstile keys are set.
+- Stage 3b (photos): an optional photo with a report. Location data is stripped, and the photo is hidden until checked or confirmed, then deleted after 2 days. Switched off until the R2 bucket exists.

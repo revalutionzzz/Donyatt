@@ -172,8 +172,9 @@ describe("status log", () => {
 
 describe("/api/config", () => {
   it("only exposes the site key when reports are fully set up", async () => {
-    expect(await apiConfig({ TURNSTILE_SITE_KEY: "site", TURNSTILE_SECRET_KEY: "s" } as ReportsEnv).json()).toEqual({ reportsEnabled: true, turnstileSiteKey: "site" });
-    expect(await apiConfig({ TURNSTILE_SITE_KEY: "site" } as ReportsEnv).json()).toEqual({ reportsEnabled: false, turnstileSiteKey: null });
+    expect(await apiConfig({ TURNSTILE_SITE_KEY: "site", TURNSTILE_SECRET_KEY: "s" } as ReportsEnv).json()).toEqual({ reportsEnabled: true, photosEnabled: false, turnstileSiteKey: "site" });
+    expect(await apiConfig({ TURNSTILE_SITE_KEY: "site" } as ReportsEnv).json()).toEqual({ reportsEnabled: false, photosEnabled: false, turnstileSiteKey: null });
+    expect(await apiConfig({ TURNSTILE_SITE_KEY: "site", TURNSTILE_SECRET_KEY: "s", PHOTOS: {} } as ReportsEnv).json()).toMatchObject({ photosEnabled: true });
   });
 });
 

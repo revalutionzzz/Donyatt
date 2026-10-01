@@ -94,6 +94,19 @@
           list.append(pill);
         }
         card.append(list);
+        const withPhoto = (road.reports?.recent || []).find((r) => r.photoId != null);
+        if (withPhoto) {
+          const a = el("a", "road-photo");
+          a.href = `/api/photos/${withPhoto.photoId}`;
+          a.target = "_blank";
+          a.rel = "noopener";
+          const img = el("img");
+          img.src = a.href;
+          img.loading = "lazy";
+          img.alt = `Photo from a driver: ${REPORT_LABELS[withPhoto.kind]}`;
+          a.append(img, el("span", null, `Driver photo · ${withPhoto.ageMinutes < 1 ? "just now" : `${withPhoto.ageMinutes} min ago`}`));
+          card.append(a);
+        }
       }
       if (config.reportsEnabled) {
         const btn = el("button", "report-btn", "Report conditions");
@@ -602,7 +615,7 @@
 
   // ---------------------------------------------------------------- driver reports
   const REPORT_LABELS = { clear: "Clear", care: "Passable with care", do_not_attempt: "Do not attempt" };
-  let config = { reportsEnabled: false, turnstileSiteKey: null };
+  let config = { reportsEnabled: false, photosEnabled: false, turnstileSiteKey: null };
   let reportRoad = null;
   let turnstileToken = null;
   let turnstileWidget = null;
@@ -638,8 +651,67 @@
     msg.className = `report-msg ${kind}`;
   }
 
+  // ---- optional photo: shrunk and re-drawn on the phone, which also drops location data
+  let photoBlob = null;
+  async function decodeImage(file) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch {
+      // Some formats only decode through an <img> (e.g. HEIC on Safari).
+      const url = URL.createObjectURL(file);
+      try {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        return img;
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    }
+  }
+  async function preparePhoto(file) {
+    const img = await decodeImage(file);
+    const w0 = img.width || img.naturalWidth;
+    const h0 = img.height || img.naturalHeight;
+    const scale = Math.min(1, 1600 / Math.max(w0, h0));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(w0 * scale);
+    canvas.height = Math.round(h0 * scale);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    const encode = (q) => new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", q));
+    let blob = await encode(0.8);
+    if (blob && blob.size > 1_400_000) blob = await encode(0.6);
+    if (!blob || blob.size > 1_400_000) throw new Error("That photo is too large.");
+    return blob;
+  }
+  function clearPhoto() {
+    photoBlob = null;
+    $("photo-input").value = "";
+    $("photo-preview").hidden = true;
+    const thumb = $("photo-thumb");
+    if (thumb.src.startsWith("blob:")) URL.revokeObjectURL(thumb.src);
+    thumb.removeAttribute("src");
+  }
+  $("photo-input").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setReportMessage("Preparing photo…");
+    try {
+      photoBlob = await preparePhoto(file);
+      $("photo-thumb").src = URL.createObjectURL(photoBlob);
+      $("photo-preview").hidden = false;
+      setReportMessage("Photo ready. Now choose what the road is like.");
+    } catch (err) {
+      clearPhoto();
+      setReportMessage(err.message || "That photo couldn't be used.", "error");
+    }
+  });
+  $("photo-remove").addEventListener("click", () => { clearPhoto(); setReportMessage(""); });
+
   async function openReport(road) {
     reportRoad = road;
+    clearPhoto();
+    $("photo-field").hidden = !config.photosEnabled;
     pendingKind = null;
     turnstileToken = null;
     $("report-title").textContent = `What's the ${road.name} like right now?`;
@@ -667,16 +739,23 @@
     if (!turnstileToken) { setReportMessage("Checking you're human…"); return; }
     setReportMessage("Sending…");
     try {
-      const res = await fetch("/api/reports", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ roadId: reportRoad.id, kind, token: turnstileToken, deviceId: deviceId() }),
-      });
+      const fields = { roadId: reportRoad.id, kind, token: turnstileToken, deviceId: deviceId() };
+      let init;
+      if (photoBlob) {
+        const form = new FormData();
+        for (const [k, v] of Object.entries(fields)) form.append(k, v);
+        form.append("photo", photoBlob, "photo.jpg");
+        init = { method: "POST", body: form };
+      } else {
+        init = { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(fields) };
+      }
+      const res = await fetch("/api/reports", init);
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Couldn't send your report.");
-      setReportMessage("Thanks, your report is counted. Stay safe, and never drive into floodwater.", "ok");
+      setReportMessage(`Thanks, your report is counted.${body.photoNote ? ` ${body.photoNote}` : ""} Never drive into floodwater.`, "ok");
+      clearPhoto();
       loadStatus();
-      setTimeout(() => $("report-dialog").open && $("report-dialog").close(), 2500);
+      setTimeout(() => $("report-dialog").open && $("report-dialog").close(), 4000);
     } catch (err) {
       setReportMessage(err.message, "error");
       for (const b of document.querySelectorAll(".choice")) b.disabled = false;
@@ -695,7 +774,7 @@
     try {
       config = await (await fetch("/api/config")).json();
     } catch {
-      config = { reportsEnabled: false };
+      config = { reportsEnabled: false, photosEnabled: false };
     }
   }
 

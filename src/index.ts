@@ -1,6 +1,6 @@
 import { fillHistory, runCollector } from "./collector";
 import { loadHistory } from "./history";
-import { adminReports, apiConfig, postReport, type ReportsEnv } from "./reportsApi";
+import { adminReports, apiConfig, getPhoto, postReport, type ReportsEnv } from "./reportsApi";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
 import { getStatus, refreshStatus, runCollectorIfStale, STALE_RUN_MS } from "./statusService";
 
@@ -96,6 +96,8 @@ export default {
     if (request.method === "GET" && pathname === "/api/config") return apiConfig(env);
     if (request.method === "POST" && pathname === "/api/reports") return postReport(request, env);
     if (pathname.startsWith("/api/admin/")) return adminReports(request, env, pathname);
+    const photo = /^\/api\/photos\/(\d+)$/.exec(pathname);
+    if (request.method === "GET" && photo) return getPhoto(env, Number(photo[1]));
     return json({ error: "Not found" }, 404);
   },
 

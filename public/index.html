@@ -86,7 +86,7 @@
 
 <footer>
   <p><strong>How this works.</strong> The status comes from the Environment Agency's Donyatt river gauge, upstream rainfall at Chard and EA flood warnings. <strong>Avoid</strong> means the river is at or close to the level where roads have flooded before (1.80 m), or the EA has a flood warning in force. <strong>Caution</strong> means the river is above normal, rising fast, or there's heavy rain upstream. <strong>Open</strong> only means the data shows no flooding. The river can rise from normal to road-flooding level in under an hour, so always follow road signs and the police.</p>
-  <p><strong>Driver reports and privacy.</strong> When you report a road, we keep the road, your choice, the time and the river readings at that moment, so we can learn when each road really floods. We don't store names, locations or IP addresses. To stop spam we use Cloudflare Turnstile and an anonymous code that changes every day, so reports can't be linked to you over time.</p>
+  <p><strong>Driver reports and privacy.</strong> When you report a road, we keep the road, your choice, the time and the river readings at that moment, so we can learn when each road really floods. We don't store names, locations or IP addresses. To stop spam we use Cloudflare Turnstile and an anonymous code that changes every day, so reports can't be linked to you over time. Photos have their location and camera details removed, stay hidden until checked or confirmed by another driver, and are deleted after 2 days.</p>
   <p>A free community tool, not an official service. <a href="https://check-for-flooding.service.gov.uk/station/3076" rel="noopener">EA Donyatt river level</a>.</p>
   <p>This uses Environment Agency flood and river level data from the real-time data API (Beta). Contains public sector information licensed under the Open Government Licence v3.0.</p>
 </footer>
@@ -100,6 +100,17 @@
     <button type="button" class="choice k-clear" data-kind="clear"><span class="pill-dot"></span>Clear<small>No water on the road</small></button>
     <button type="button" class="choice k-care" data-kind="care"><span class="pill-dot"></span>Passable with care<small>Some water, but traffic getting through</small></button>
     <button type="button" class="choice k-do_not_attempt" data-kind="do_not_attempt"><span class="pill-dot"></span>Do not attempt<small>Flooded, or cars turning back</small></button>
+  </div>
+  <div class="photo-field" id="photo-field" hidden>
+    <label class="photo-add" for="photo-input">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      <span>Add a photo <small>(optional, only if it's safe to take one)</small></span>
+    </label>
+    <input id="photo-input" type="file" accept="image/*" capture="environment" hidden>
+    <div class="photo-preview" id="photo-preview" hidden>
+      <img id="photo-thumb" alt="Your photo">
+      <button type="button" class="linkbtn" id="photo-remove">Remove photo</button>
+    </div>
   </div>
   <div id="turnstile-box"></div>
   <p id="report-msg" class="report-msg" role="status" aria-live="polite"></p>
