@@ -1,9 +1,10 @@
 import { fillHistory, runCollector } from "./collector";
 import { loadHistory } from "./history";
+import { adminReports, apiConfig, postReport, type ReportsEnv } from "./reportsApi";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
 import { getStatus, refreshStatus, runCollectorIfStale, STALE_RUN_MS } from "./statusService";
 
-export interface Env {
+export interface Env extends ReportsEnv {
   DB: D1Database;
   STATUS: KVNamespace;
 }
@@ -92,6 +93,9 @@ export default {
     if (request.method === "GET" && pathname === "/api/status") return apiStatus(env);
     if (request.method === "GET" && pathname === "/api/history") return apiHistory(env, Number(searchParams.get("days") ?? 2));
     if (request.method === "GET" && pathname === "/health") return health(env);
+    if (request.method === "GET" && pathname === "/api/config") return apiConfig(env);
+    if (request.method === "POST" && pathname === "/api/reports") return postReport(request, env);
+    if (pathname.startsWith("/api/admin/")) return adminReports(request, env, pathname);
     return json({ error: "Not found" }, 404);
   },
 

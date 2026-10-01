@@ -81,3 +81,17 @@ export const ROADS: Road[] = [
     cautionHoldHours: 6,
   },
 ];
+
+/**
+ * Driver reports. Each counts fully for `fullWeightMinutes`, then fades linearly to nothing at
+ * `expireMinutes`. Weighted totals decide the effect, and reports can only make a status stricter.
+ * One fresh "Do not attempt" means at least Caution; two (or one fresh plus an older one) mean Avoid.
+ * Starting values; to be tuned against real reports.
+ */
+export const REPORTS = {
+  fullWeightMinutes: 30,
+  expireMinutes: 180,
+  avoidAtDoNotAttempt: 1.5,
+  cautionAtDoNotAttempt: 0.5,
+  cautionAtCare: 1.0,
+};

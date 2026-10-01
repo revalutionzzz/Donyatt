@@ -22,6 +22,11 @@ migrations_dir = "migrations"
 binding = "STATUS"
 id = "683fae22ded14b73ad42acf6cbfacab1"
 
+# Public values only. Secrets (TURNSTILE_SECRET_KEY, ADMIN_TOKEN) are set as Worker secrets in the dashboard.
+[vars]
+# Turnstile site key (public). Driver reports stay switched off until this and the secret are both set.
+TURNSTILE_SITE_KEY = ""
+
 # Static page (public/index.html). Files are served directly; other paths (/api/status, /health) reach the Worker.
 [assets]
 directory = "./public"

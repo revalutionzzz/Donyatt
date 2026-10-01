@@ -70,6 +70,30 @@ Notes:
 - The downstream roads (B3168 Ilford Bridges, Isle Brewers–Fivehead) have no published threshold. They use the Donyatt gauge with longer holds, as cautious defaults to tighten with local knowledge or reports.
 - EA flood-warning times (`timeRaised` etc.) have no zone suffix. The page assumes UTC; this is unverified.
 
+## Driver reports and learning data (Stage 3, text reports; photos in 3b)
+
+- **Weighting** (`REPORTS` in `src/rules.ts`, logic in `src/reports.ts`): each report counts fully for 30 min, then fades to 0 at 3 h.
+  - "Do not attempt" weight ≥ 0.5 means at least Caution; ≥ 1.5 means Avoid.
+  - "Passable with care" weight ≥ 1 means Caution.
+  - "Clear" never lowers anything; it's shown as information on Open or Caution roads.
+  - Reports only ever make a status stricter.
+- **`POST /api/reports`** (`src/reportsApi.ts`):
+  - Turnstile is verified server-side, with the visitor IP sent to siteverify.
+  - Rate limits: 1 per road per device per 10 min, 6 per device per day, 20 per network address per day.
+  - Each report stores a snapshot of what we knew (status shown, level, rate of rise, 3 h rain, worst EA warning).
+- **Privacy:** no IPs, names or locations are stored.
+  - `device_hash` and `ip_hash` are HMACs with a random daily key held in KV (`salt:YYYY-MM-DD`, 3-day TTL). They work for same-day rate limits but can't link anyone across days.
+  - The page footer explains this. Keep it accurate if anything changes.
+- **Switching reports on:**
+  - Reports are off (button hidden, API returns 503) until both `TURNSTILE_SITE_KEY` (`[vars]` in `wrangler.toml`, public) and the `TURNSTILE_SECRET_KEY` Worker secret are set.
+  - Moderation (`/admin.html`, `/api/admin/reports`) is off until the `ADMIN_TOKEN` Worker secret is set.
+  - Set secrets in the dashboard as type **Secret**: plain dashboard variables are wiped by the next deploy.
+- **Learning data, kept indefinitely:**
+  - `status_log` has a row whenever a road's status changes, plus hourly snapshots, each with the inputs and reasons.
+  - `reports` keeps every report, including moderated ones (`hidden = 1`, never counted).
+  - Use both to tune per-road thresholds and hold times, and to score past calls. Learning may only **suggest** threshold changes; a human approves them in a PR.
+- Gotcha: a DOM element with `id="turnstile"` shadows `window.turnstile`. The widget container is `#turnstile-box`.
+
 ## Product rules (non-negotiable)
 
 - Never describe a road as "safe". Use Open / Caution / Avoid and "never drive into floodwater" messaging.
@@ -110,7 +134,7 @@ Notes:
 - `public/`: the static site.
   - `index.html`, `styles.css` and `app.js`: plain JS with no dependencies, rendering SVG charts by hand. Chart colours are level = blue, rain = aqua, checked with the dataviz palette validator. Status colours are reserved for Open/Caution/Avoid and always shown with an icon and label. Animations are off under `prefers-reduced-motion`.
   - `data/flood-history.json`: annual peaks and every ≥ 1.80 m event, regenerated with `python3 model/analyse_events.py --json public/data/flood-history.json`.
-- Endpoints: `/` (page), `/api/status` (JSON, cached 60 s), `/api/history?days=1|2|7` (level and hourly rain for the charts, cached 5 min; tops up missing days from the EA once), `/health` (collector diagnostics). The cron also tops up history hourly via `fillHistory`, a no-op once 7 days are stored.
+- Endpoints: `/api/config` (whether reports are on, plus the Turnstile site key), `POST /api/reports`, `/admin.html` with `/api/admin/reports` (moderation), `/` (page), `/api/status` (JSON, cached 60 s), `/api/history?days=1|2|7` (level and hourly rain for the charts, cached 5 min; tops up missing days from the EA once), `/health` (collector diagnostics). The cron also tops up history hourly via `fillHistory`, a no-op once 7 days are stored.
 - `migrations/`: D1 schema (applied on deploy by `npm run deploy`).
 - `test/`: Vitest tests. `fixtures/` holds real saved EA responses; files named `*synthetic*` are invented data in the EA shape. `d1-sqlite.ts` is a small D1 stand-in on Node's built-in SQLite. (`@cloudflare/vitest-pool-workers` currently fails to install with npm 10.)
 - `model/`: Python. `backfill.py` downloads history into `model/data/` (git-ignored). `analyse_events.py` (needs `pip install -r model/requirements.txt`) regenerates `model/reports/flood_events.md`, the evidence behind the thresholds in `src/rules.ts`.

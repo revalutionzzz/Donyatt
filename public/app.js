@@ -83,6 +83,24 @@
       const ul = el("ul");
       for (const reason of road.reasons) ul.append(el("li", null, reason));
       card.append(el("h2", null, road.name), el("p", "where", road.where), chip, el("p", "headline", headline), ul);
+      // Every report shows its age.
+      const recent = (road.reports?.recent || []).slice(0, 3);
+      if (recent.length) {
+        const list = el("div", "reports");
+        list.append(el("span", "reports-label", "Driver reports"));
+        for (const r of recent) {
+          const pill = el("span", `pill k-${r.kind}`);
+          pill.append(el("span", "pill-dot"), document.createTextNode(`${REPORT_LABELS[r.kind]} · ${r.ageMinutes < 1 ? "just now" : `${r.ageMinutes} min ago`}`));
+          list.append(pill);
+        }
+        card.append(list);
+      }
+      if (config.reportsEnabled) {
+        const btn = el("button", "report-btn", "Report conditions");
+        btn.type = "button";
+        btn.addEventListener("click", () => openReport(road));
+        card.append(btn);
+      }
       return card;
     });
     $("roads").replaceChildren(...cards);
@@ -582,6 +600,105 @@
     }
   }
 
+  // ---------------------------------------------------------------- driver reports
+  const REPORT_LABELS = { clear: "Clear", care: "Passable with care", do_not_attempt: "Do not attempt" };
+  let config = { reportsEnabled: false, turnstileSiteKey: null };
+  let reportRoad = null;
+  let turnstileToken = null;
+  let turnstileWidget = null;
+  let pendingKind = null;
+
+  function deviceId() {
+    // A random code for rate limiting only; the server never stores it as-is.
+    try {
+      let id = localStorage.getItem("dfw-device");
+      if (!id) { id = crypto.randomUUID(); localStorage.setItem("dfw-device", id); }
+      return id;
+    } catch {
+      return (deviceId.fallback ||= crypto.randomUUID());
+    }
+  }
+
+  function loadTurnstile() {
+    // Check for the API itself: an element with id "turnstile" would also appear as window.turnstile.
+    if (typeof window.turnstile?.render === "function") return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const sc = document.createElement("script");
+      sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      sc.async = true;
+      sc.onload = () => resolve();
+      sc.onerror = () => reject(new Error("Spam check failed to load"));
+      document.head.append(sc);
+    });
+  }
+
+  function setReportMessage(text, kind = "") {
+    const msg = $("report-msg");
+    msg.textContent = text;
+    msg.className = `report-msg ${kind}`;
+  }
+
+  async function openReport(road) {
+    reportRoad = road;
+    pendingKind = null;
+    turnstileToken = null;
+    $("report-title").textContent = `What's the ${road.name} like right now?`;
+    setReportMessage("");
+    for (const b of document.querySelectorAll(".choice")) b.disabled = false;
+    $("report-dialog").showModal();
+    try {
+      await loadTurnstile();
+      if (turnstileWidget != null) window.turnstile.remove(turnstileWidget);
+      turnstileWidget = window.turnstile.render("#turnstile-box", {
+        sitekey: config.turnstileSiteKey,
+        action: "report",
+        callback: (token) => { turnstileToken = token; if (pendingKind) submitReport(pendingKind); },
+        "expired-callback": () => { turnstileToken = null; },
+        "error-callback": () => setReportMessage("The spam check couldn't run. Please try again.", "error"),
+      });
+    } catch {
+      setReportMessage("The spam check couldn't load, so reports can't be sent right now.", "error");
+    }
+  }
+
+  async function submitReport(kind) {
+    pendingKind = kind;
+    for (const b of document.querySelectorAll(".choice")) b.disabled = true;
+    if (!turnstileToken) { setReportMessage("Checking you're human…"); return; }
+    setReportMessage("Sending…");
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ roadId: reportRoad.id, kind, token: turnstileToken, deviceId: deviceId() }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Couldn't send your report.");
+      setReportMessage("Thanks, your report is counted. Stay safe, and never drive into floodwater.", "ok");
+      loadStatus();
+      setTimeout(() => $("report-dialog").open && $("report-dialog").close(), 2500);
+    } catch (err) {
+      setReportMessage(err.message, "error");
+      for (const b of document.querySelectorAll(".choice")) b.disabled = false;
+    } finally {
+      // Tokens are single-use.
+      turnstileToken = null;
+      pendingKind = null;
+      if (turnstileWidget != null && window.turnstile) window.turnstile.reset(turnstileWidget);
+    }
+  }
+
+  for (const b of document.querySelectorAll(".choice")) b.addEventListener("click", () => submitReport(b.dataset.kind));
+  $("report-close").addEventListener("click", () => $("report-dialog").close());
+
+  async function loadConfig() {
+    try {
+      config = await (await fetch("/api/config")).json();
+    } catch {
+      config = { reportsEnabled: false };
+    }
+  }
+
   // ---------------------------------------------------------------- wiring
   let resizeTimer;
   let lastWidth = window.innerWidth;
@@ -592,6 +709,7 @@
     resizeTimer = setTimeout(() => { drawTrend(); if (pastAnimated) drawPast(); }, 150);
   });
 
+  loadConfig().then(() => { if (lastStatus) renderRoads(lastStatus.roads); });
   loadStatus();
   loadHistory();
   loadPast();

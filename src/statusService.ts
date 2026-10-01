@@ -1,5 +1,8 @@
 import { runCollector, type CollectorResult } from "./collector";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
+import type { DriverReport } from "./reports";
+import { REPORTS } from "./rules";
+import { logStatus } from "./statusLog";
 import { computeStatus, type ActiveWarning, type StatusInputs, type StatusReport, type TimedValue } from "./status";
 
 export const STATUS_KV_KEY = "status:v1";
@@ -52,13 +55,22 @@ export async function loadStatusInputs(db: D1Database, now: Date): Promise<Statu
       .all<ActiveWarning>();
     warnings = results;
   }
-  return { now, levels, rain, warnings, warningsCheckedAt: lastCheck?.started_at ?? null };
+  const { results: reports } = await db
+    .prepare(
+      `SELECT road_id AS roadId, kind, created_at AS createdAt FROM reports
+       WHERE hidden = 0 AND created_at >= ? ORDER BY created_at`,
+    )
+    .bind(new Date(t - REPORTS.expireMinutes * 60_000).toISOString())
+    .all<DriverReport>();
+  return { now, levels, rain, warnings, warningsCheckedAt: lastCheck?.started_at ?? null, reports };
 }
 
 /** Recompute the road status from D1 and cache it in KV. */
 export async function refreshStatus(db: D1Database, kv: KVNamespace, now = new Date()): Promise<StatusReport> {
   const report = computeStatus(await loadStatusInputs(db, now));
   await kv.put(STATUS_KV_KEY, JSON.stringify(report));
+  // History for learning; a logging failure must never block the live status.
+  await logStatus(db, report).catch((err) => console.error("Status log failed:", err instanceof Error ? err.message : err));
   return report;
 }
 
