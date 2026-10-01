@@ -62,8 +62,32 @@ describe("/health", () => {
     const body = await (await health(env(empty), t + 30 * 1000, second.fn)).json<Record<string, any>>();
 
     expect(first.count()).toBe(4);
-    expect(second.count()).toBe(0);
+    // No collector run, only the forecast backstop (this database has no forecast yet).
+    expect(second.count()).toBe(1);
     expect(body.cronLooksHealthy).toBe(false);
+  });
+
+  it("shows the forecast state, with Open-Meteo's reason when it fails, and retries at most every 10 minutes", async () => {
+    const { d1 } = createTestD1();
+    const t = nextTime();
+    let forecastCalls = 0;
+    const fn = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("open-meteo")) {
+        forecastCalls++;
+        return Response.json({ error: true, reason: "Too many requests" }, { status: 429 });
+      }
+      return fakeFetch().fn(input);
+    }) as typeof fetch;
+    const body = await (await health(env(d1), t, fn)).json<Record<string, any>>();
+    expect(body.forecast).toMatchObject({
+      latestFetchedAt: null,
+      lastAttempt: { ok: false, hours: 0, error: "Open-Meteo HTTP 429: Too many requests" },
+    });
+    await health(env(d1), t + 5 * 60_000, fn);
+    expect(forecastCalls).toBe(1);
+    await health(env(d1), t + 11 * 60_000, fn);
+    expect(forecastCalls).toBe(2);
   });
 
   it("reports a database failure instead of throwing", async () => {

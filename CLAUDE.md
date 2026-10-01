@@ -129,7 +129,8 @@ Notes:
 
 - **Forecast** (`src/forecast.ts`):
   - Open-Meteo `/v1/forecast` for the Chard Snowdon Hill gauge location: `hourly=precipitation`, `timezone=GMT`, 24 h. Each value is the rain in the hour ending at that time.
-  - Fetched from the cron, and the request backstop, at most hourly (self-throttled via D1).
+  - Fetched at most hourly (self-throttled via D1) from the cron, the collector backstop, `/health` and `/api/history` (when there's no fresh forecast), so the chart doesn't depend on the cron. After a failure it retries at most every 10 min.
+  - Every attempt is logged in `forecast_attempts`, and `/health` shows `forecast` (latest fetch, age, last attempt and Open-Meteo's error reason).
   - Every fetch is kept in `rain_forecasts`, so forecasts can be scored against the gauge later.
   - Unverified against a live response: the sandbox can't reach Open-Meteo, so the test fixture is synthetic, shaped from the docs.
 - **Model** (`model/train.py`, exported to `src/model/flood-model.json`, evaluated by `src/predict.ts`):

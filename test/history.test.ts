@@ -1,4 +1,6 @@
 /// <reference types="node" />
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fillHistory, runCollector } from "../src/collector";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "../src/config";
@@ -92,5 +94,15 @@ describe("/api/history", () => {
     expect(res.headers.get("cache-control")).toBe("public, max-age=300");
     const body = await res.json<{ level: [string, number][] }>();
     expect(body.level[0][0] < "2026-09-25").toBe(true);
+  });
+
+  it("fetches a forecast itself when there's no fresh one, so the chart doesn't depend on the cron", async () => {
+    const { d1 } = createTestD1();
+    const forecast = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", "open-meteo-forecast-synthetic.json"), "utf8"));
+    const now = new Date("2026-09-30T20:30:00Z");
+    const fn = (async () => Response.json(forecast)) as unknown as typeof fetch;
+    const body = await (await apiHistory({ DB: d1 } as Env, 1, now.getTime(), fn)).json<{ rainForecast: [string, number][]; forecastFetchedAt: string }>();
+    expect(body.forecastFetchedAt).toBe(now.toISOString());
+    expect(body.rainForecast.length).toBeGreaterThan(0);
   });
 });

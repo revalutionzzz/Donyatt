@@ -41,21 +41,76 @@ export function parseForecast(body: unknown): ForecastHour[] {
   return out;
 }
 
-/** Fetch and store a forecast if the latest stored one is older than FORECAST_REFRESH_MIN. Returns rows stored. */
+/** After a failed attempt, wait this long before trying Open-Meteo again. */
+export const FORECAST_RETRY_MIN = 10;
+
+/**
+ * Fetch and store a forecast if the latest stored one is older than FORECAST_REFRESH_MIN (and the
+ * last attempt didn't fail within FORECAST_RETRY_MIN). Every attempt is logged in
+ * `forecast_attempts`. Returns rows stored; throws if the fetch fails.
+ */
 export async function collectForecast(db: D1Database, now = new Date(), fetchFn: typeof fetch = fetch): Promise<number> {
   const last = await db.prepare("SELECT MAX(fetched_at) AS at FROM rain_forecasts").first<{ at: string | null }>();
   if (last?.at && now.getTime() - Date.parse(last.at) < FORECAST_REFRESH_MIN * 60_000) return 0;
-  const res = await fetchFn(forecastUrl(), {
-    headers: { "User-Agent": "donyatt-flood-watch (community flood tool)" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
-  const hours = parseForecast(await res.json());
-  if (!hours.length) return 0;
-  const fetchedAt = now.toISOString();
-  const stmt = db.prepare("INSERT OR IGNORE INTO rain_forecasts (fetched_at, hour_end, mm) VALUES (?, ?, ?)");
-  await db.batch(hours.map((h) => stmt.bind(fetchedAt, h.hourEnd, h.mm)));
-  return hours.length;
+  const attempt = await lastAttempt(db);
+  if (attempt && !attempt.ok && now.getTime() - Date.parse(attempt.at) < FORECAST_RETRY_MIN * 60_000) return 0;
+
+  const log = (ok: boolean, hours: number, error: string | null) =>
+    db
+      .prepare("INSERT OR REPLACE INTO forecast_attempts (attempted_at, ok, hours, error) VALUES (?, ?, ?, ?)")
+      .bind(now.toISOString(), ok ? 1 : 0, hours, error)
+      .run()
+      .catch(() => undefined); // logging is best-effort
+  try {
+    const res = await fetchFn(forecastUrl(), {
+      headers: { "User-Agent": "donyatt-flood-watch (community flood tool)" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) {
+      // Open-Meteo explains rejections as {"error": true, "reason": "..."}.
+      const text = await res.text().catch(() => "");
+      let reason = text.slice(0, 200);
+      try {
+        reason = String(JSON.parse(text).reason ?? reason);
+      } catch {}
+      throw new Error(`Open-Meteo HTTP ${res.status}${reason ? `: ${reason}` : ""}`);
+    }
+    const hours = parseForecast(await res.json());
+    if (!hours.length) throw new Error("Open-Meteo returned no forecast hours");
+    const fetchedAt = now.toISOString();
+    const stmt = db.prepare("INSERT OR IGNORE INTO rain_forecasts (fetched_at, hour_end, mm) VALUES (?, ?, ?)");
+    await db.batch(hours.map((h) => stmt.bind(fetchedAt, h.hourEnd, h.mm)));
+    await log(true, hours.length, null);
+    return hours.length;
+  } catch (err) {
+    await log(false, 0, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+}
+
+interface Attempt {
+  at: string;
+  ok: boolean;
+  hours: number;
+  error: string | null;
+}
+
+async function lastAttempt(db: D1Database): Promise<Attempt | null> {
+  const row = await db
+    .prepare("SELECT attempted_at AS at, ok, hours, error FROM forecast_attempts ORDER BY attempted_at DESC LIMIT 1")
+    .first<{ at: string; ok: number; hours: number; error: string | null }>()
+    .catch(() => null); // table missing until migration 0006 is applied
+  return row ? { ...row, ok: row.ok === 1 } : null;
+}
+
+/** For /health: the latest stored forecast and the latest fetch attempt. */
+export async function forecastHealth(db: D1Database, now: Date) {
+  const last = await db.prepare("SELECT MAX(fetched_at) AS at FROM rain_forecasts").first<{ at: string | null }>();
+  return {
+    latestFetchedAt: last?.at ?? null,
+    ageMinutes: last?.at ? Math.round((now.getTime() - Date.parse(last.at)) / 60_000) : null,
+    lastAttempt: await lastAttempt(db),
+  };
 }
 
 export interface StoredForecast {
