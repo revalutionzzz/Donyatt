@@ -51,6 +51,25 @@ Notes:
 | 2.03 m | Property flooding possible / flood warning threshold |
 | 2.63 m | Highest recorded (31 Dec 2000) |
 
+## Stage 2 status rules (see `src/rules.ts` and `model/reports/flood_events.md`)
+
+- The river is flashy. Across 56 floods since 1992 it took a median of 1.0 h (shortest 12 min) from 1.40 m to 1.80 m, and live EA readings arrive 15-45 min late.
+- **Avoid:**
+  - EA flood warning or severe flood warning in force, or
+  - level ≥ 1.80 m, or
+  - level ≥ 1.50 m and projected to reach 1.80 m within 1 h plus the reading's age, or
+  - a hold after the peak (A358 1 h, downstream roads 3 h).
+- **Caution:**
+  - level ≥ 1.20 m, or
+  - level ≥ 1.00 m and rising ≥ 0.10 m/h, or
+  - EA flood alert, or
+  - ≥ 20 mm rain in 3 h / ≥ 35 mm in 12 h at Snowdon Hill, or
+  - EA warnings not checked for 60 min, or
+  - a hold (A358 1 h, downstream 6 h).
+- **Unknown** (never Open) when the level reading is over 90 min old.
+- The downstream roads (B3168 Ilford Bridges, Isle Brewers–Fivehead) have no published threshold. They use the Donyatt gauge with longer holds, as cautious defaults to tighten with local knowledge or reports.
+- EA flood-warning times (`timeRaised` etc.) have no zone suffix. The page assumes UTC; this is unverified.
+
 ## Product rules (non-negotiable)
 
 - Never describe a road as "safe". Use Open / Caution / Avoid and "never drive into floodwater" messaging.
@@ -85,10 +104,14 @@ Notes:
 
 ## Repo layout and commands
 
-- `src/`: the Worker. `collector.ts` is the 15-minute cron job, `ea.ts` the EA API client and `config.ts` the EA IDs.
+- `src/`: the Worker.
+  - `collector.ts` is the 15-minute cron job, `ea.ts` the EA API client and `config.ts` the EA IDs.
+  - `rules.ts` holds the status thresholds and the road list, `status.ts` the pure Open/Caution/Avoid/Unknown logic, and `statusService.ts` loads from D1, caches in KV (`status:v1`) and runs the collector itself when the cron hasn't run for 20 minutes.
+- `public/index.html`: the mobile-first status page (static asset). It reads `/api/status`.
+- Endpoints: `/` (page), `/api/status` (JSON, cached 60 s), `/health` (collector diagnostics).
 - `migrations/`: D1 schema (applied on deploy by `npm run deploy`).
 - `test/`: Vitest tests. `fixtures/` holds real saved EA responses; files named `*synthetic*` are invented data in the EA shape. `d1-sqlite.ts` is a small D1 stand-in on Node's built-in SQLite. (`@cloudflare/vitest-pool-workers` currently fails to install with npm 10.)
-- `model/`: Python. `backfill.py` downloads history into `model/data/` (git-ignored).
+- `model/`: Python. `backfill.py` downloads history into `model/data/` (git-ignored). `analyse_events.py` (needs `pip install -r model/requirements.txt`) regenerates `model/reports/flood_events.md`, the evidence behind the thresholds in `src/rules.ts`.
 - `npm test`, `npm run typecheck`, `npm run dev` (then `curl "localhost:8787/__scheduled?cron=*/15+*+*+*+*"` to trigger the collector and `curl localhost:8787/health` to see the results). Run `npm run db:migrate:local` once first.
 - `cd model && python3 -m unittest test_backfill`
 

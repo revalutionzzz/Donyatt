@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Donyatt Flood Watch</title>
+<meta name="description" content="River Isle flood status for the A358 at Donyatt, the B3168 at Ilford Bridges and the Isle Brewers to Fivehead road.">
+<meta name="theme-color" content="#0b3d5c">
+<style>
+  :root {
+    --bg: #f4f6f8; --card: #ffffff; --text: #16202a; --muted: #55616d; --line: #d8dee4;
+    --brand: #0b3d5c; --brand-text: #ffffff;
+    --avoid: #b00020; --avoid-bg: #fde8eb;
+    --caution: #8a5a00; --caution-bg: #fff4d6;
+    --open: #1d6b35; --open-bg: #e5f4ea;
+    --unknown: #4a5561; --unknown-bg: #eceff2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f151b; --card: #18212a; --text: #e8edf2; --muted: #a3afbb; --line: #2c3845;
+      --brand: #0b3d5c; --brand-text: #ffffff;
+      --avoid: #ff8a9a; --avoid-bg: #3a1419;
+      --caution: #ffcf66; --caution-bg: #3a2c0a;
+      --open: #7fd69a; --open-bg: #12301c;
+      --unknown: #c3ccd5; --unknown-bg: #26303a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--brand); color: var(--brand-text); padding: 14px 16px; }
+  header h1 { margin: 0; font-size: 1.25rem; }
+  header p { margin: 2px 0 0; opacity: .85; font-size: .9rem; }
+  main { max-width: 640px; margin: 0 auto; padding: 12px 16px 32px; }
+  .advice { background: var(--avoid-bg); color: var(--text); border-left: 6px solid var(--avoid); padding: 10px 12px; border-radius: 6px; font-weight: 600; margin: 4px 0 12px; }
+  .meta { color: var(--muted); font-size: .9rem; margin: 0 0 12px; }
+  .road { background: var(--card); border: 1px solid var(--line); border-left: 10px solid var(--unknown); border-radius: 10px; padding: 12px 14px; margin: 0 0 12px; }
+  .road h2 { margin: 0; font-size: 1.1rem; }
+  .road .where { color: var(--muted); font-size: .85rem; margin: 0 0 8px; }
+  .badge { display: inline-block; font-weight: 800; font-size: 1.05rem; letter-spacing: .02em; padding: 3px 10px; border-radius: 6px; margin: 0 0 6px; }
+  .road .headline { margin: 0 0 4px; font-weight: 600; }
+  .road ul { margin: 4px 0 0; padding-left: 20px; }
+  .road li { margin: 2px 0; }
+  .s-avoid { border-left-color: var(--avoid); } .s-avoid .badge { background: var(--avoid-bg); color: var(--avoid); }
+  .s-caution { border-left-color: var(--caution); } .s-caution .badge { background: var(--caution-bg); color: var(--caution); }
+  .s-open { border-left-color: var(--open); } .s-open .badge { background: var(--open-bg); color: var(--open); }
+  .s-unknown { border-left-color: var(--unknown); } .s-unknown .badge { background: var(--unknown-bg); color: var(--unknown); }
+  section.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0 0 12px; }
+  section.panel h2 { margin: 0 0 6px; font-size: 1rem; }
+  .big { font-size: 1.6rem; font-weight: 800; }
+  .gauge { position: relative; height: 16px; border-radius: 8px; background: linear-gradient(90deg, var(--open-bg) 0 46%, var(--caution-bg) 46% 69%, var(--avoid-bg) 69% 100%); border: 1px solid var(--line); margin: 10px 0 26px; }
+  .gauge .fill { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--text); border-radius: 2px; }
+  .gauge .tick { position: absolute; top: 18px; font-size: .72rem; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
+  .gauge .tick::before { content: ""; position: absolute; left: 50%; top: -20px; height: 16px; border-left: 1px dashed var(--muted); }
+  .problems { color: var(--caution); font-weight: 600; }
+  footer { color: var(--muted); font-size: .8rem; }
+  a { color: inherit; }
+  .error { background: var(--unknown-bg); border-radius: 10px; padding: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Donyatt Flood Watch</h1>
+  <p>River Isle road flooding status, updated every 15 minutes</p>
+</header>
+<main>
+  <p class="advice" id="advice">Never drive into floodwater. Just 30 cm of moving water can float a car. If in doubt, turn around.</p>
+  <p class="meta" id="updated" aria-live="polite">Loading the latest status…</p>
+  <div id="roads"></div>
+
+  <section class="panel" id="river-panel" hidden>
+    <h2>River Isle at Donyatt</h2>
+    <div><span class="big" id="level"></span> <span id="trend"></span></div>
+    <div class="gauge" id="gauge" role="img"></div>
+    <div class="meta">Green: normal range. Amber: above normal (from 1.20 m). Red: roads have flooded (from 1.80 m).</div>
+    <div class="meta" id="level-age"></div>
+  </section>
+
+  <section class="panel" id="rain-panel" hidden>
+    <h2>Rain upstream at Chard (Snowdon Hill)</h2>
+    <div id="rain"></div>
+  </section>
+
+  <section class="panel" id="warnings-panel" hidden>
+    <h2>Environment Agency flood warnings</h2>
+    <div id="warnings"></div>
+    <p class="meta"><a href="https://check-for-flooding.service.gov.uk/target-area/112FWFISL10A" rel="noopener">EA warning page for the River Isle</a></p>
+  </section>
+
+  <p class="problems" id="problems" hidden></p>
+
+  <footer>
+    <p><strong>How this works:</strong> the status comes from the Environment Agency's Donyatt river gauge, upstream rainfall at Chard and EA flood warnings. <strong>Avoid</strong> means the river is at or near the level where roads have flooded before (1.80 m), or the EA has a flood warning in force. <strong>Caution</strong> means the river is above normal, rising fast, or there's heavy rain upstream. <strong>Open</strong> only means the data shows no flooding. Conditions can change fast, so always follow road signs and the police.</p>
+    <p>A free community tool, not an official service. <a href="https://check-for-flooding.service.gov.uk/station/3076" rel="noopener">EA Donyatt river level</a>.</p>
+    <p>This uses Environment Agency flood and river level data from the real-time data API (Beta). Contains public sector information licensed under the Open Government Licence v3.0.</p>
+  </footer>
+</main>
+<script>
+(() => {
+  const LABELS = { avoid: "AVOID", caution: "CAUTION", open: "OPEN", unknown: "UNKNOWN" };
+  const GAUGE_MAX = 2.6;
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const pct = (m) => `${Math.max(0, Math.min(100, (m / GAUGE_MAX) * 100))}%`;
+  let lastReport = null;
+
+  function ago(iso) {
+    if (!iso) return "unknown";
+    // EA timestamps without a zone are UTC.
+    const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + "Z");
+    const min = Math.round((Date.now() - t) / 60000);
+    if (min < 1) return "just now";
+    if (min < 60) return `${min} min ago`;
+    const h = Math.floor(min / 60);
+    return h < 48 ? `${h} h ${min % 60} min ago` : `${Math.floor(h / 24)} days ago`;
+  }
+  function clock(iso) {
+    return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+  }
+
+  function render(r) {
+    lastReport = r;
+    $("advice").textContent = r.advice;
+    $("updated").textContent = `Status worked out ${ago(r.generatedAt)} (${clock(r.generatedAt)}).`;
+
+    const roads = $("roads");
+    roads.replaceChildren(...r.roads.map((road) => {
+      const card = el("article", `road s-${road.status}`);
+      card.append(el("h2", null, road.name), el("p", "where", road.where), el("div", "badge", LABELS[road.status] || road.status.toUpperCase()), el("p", "headline", road.headline.replace(/^[A-Za-z]+: (.)/, (_, c) => c.toUpperCase())));
+      const ul = el("ul");
+      for (const reason of road.reasons) ul.append(el("li", null, reason));
+      card.append(ul);
+      return card;
+    }));
+
+    if (r.river.levelM != null) {
+      $("river-panel").hidden = false;
+      $("level").textContent = `${r.river.levelM.toFixed(2)} m`;
+      const trend = { rising: "↑ rising", falling: "↓ falling", steady: "→ steady" }[r.river.trend] || "";
+      const rate = r.river.risePerHourM != null && r.river.trend !== "steady" ? ` (${r.river.risePerHourM > 0 ? "+" : ""}${r.river.risePerHourM.toFixed(2)} m/h)` : "";
+      $("trend").textContent = trend + rate;
+      const gauge = $("gauge");
+      gauge.setAttribute("aria-label", `River level ${r.river.levelM.toFixed(2)} metres. Normal up to 1.20 m, roads have flooded from 1.80 m, highest recorded 2.63 m.`);
+      const marker = el("div", "fill"); marker.style.left = pct(r.river.levelM);
+      const ticks = [[1.2, "1.2 m"], [1.8, "1.8 m"]].map(([m, label]) => { const t = el("span", "tick", label); t.style.left = pct(m); return t; });
+      gauge.replaceChildren(marker, ...ticks);
+      $("level-age").textContent = `Reading taken ${ago(r.river.readingAt)}. Highest ever recorded: 2.63 m (31 Dec 2000).`;
+    }
+
+    if (r.rain.last3hMm != null) {
+      $("rain-panel").hidden = false;
+      $("rain").textContent = `${r.rain.last3hMm} mm in the last 3 hours, ${r.rain.last12hMm} mm in the last 12 hours.`;
+    }
+
+    $("warnings-panel").hidden = false;
+    const w = $("warnings");
+    if (r.warnings.length) {
+      w.replaceChildren(...r.warnings.map((x) => el("p", null, `${x.severity}${x.timeRaised ? ` (raised ${ago(x.timeRaised)})` : ""}`)));
+    } else {
+      w.textContent = r.warningsCheckedAt ? `No flood alerts or warnings for this area (checked ${ago(r.warningsCheckedAt)}).` : "Not checked yet.";
+    }
+
+    const problems = $("problems");
+    problems.hidden = !r.dataProblems.length;
+    problems.textContent = r.dataProblems.join(" ");
+  }
+
+  async function load() {
+    try {
+      const res = await fetch("/api/status", { cache: "no-store" });
+      const body = await res.json();
+      if (!res.ok || !body.roads) throw new Error(body.error || "Status unavailable");
+      render(body);
+    } catch (err) {
+      if (!lastReport) {
+        $("updated").textContent = "";
+        $("roads").replaceChildren(el("div", "error", "The status is unavailable right now. Check conditions yourself, and never drive into floodwater."));
+      } else {
+        $("updated").textContent = `Couldn't refresh. Showing the status from ${ago(lastReport.generatedAt)}.`;
+      }
+    }
+  }
+
+  load();
+  setInterval(load, 2 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+})();
+</script>
+</body>
+</html>
