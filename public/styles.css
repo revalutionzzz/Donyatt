@@ -158,6 +158,10 @@ main { max-width: 960px; margin: -36px auto 0; padding: 0 16px 40px; position: r
 
 /* Charts */
 .chart { position: relative; }
+.forecast-summary { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 12px; font-size: 0.9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.forecast-summary b { color: var(--ink-2); }
+.forecast-summary .fc-title { width: 100%; color: var(--ink-2); font-weight: 650; }
+.forecast-summary .fc-note { width: 100%; }
 .chart svg { display: block; width: 100%; overflow: visible; }
 .chart .label { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .chart .title { fill: var(--ink-2); font-size: 12px; font-weight: 650; }

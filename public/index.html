@@ -88,6 +88,7 @@
       </div>
       <div class="chart" id="level-chart" tabindex="0" aria-label="River level chart. Use left and right arrow keys to move through readings."></div>
       <div class="chart" id="rain-chart" aria-hidden="true"></div>
+      <p class="forecast-summary" id="forecast-summary" aria-live="polite"></p>
       <div class="table-wrap" id="trend-table" hidden></div>
     </section>
   </div>
@@ -112,7 +113,7 @@
   <p><strong>How this works.</strong> The status comes from the Environment Agency's Donyatt river gauge, upstream rainfall at Chard and EA flood warnings. <strong>Avoid</strong> means the river is at or close to the level where roads have flooded before (1.80 m), or the EA has a flood warning in force. <strong>Caution</strong> means the river is above normal, rising fast, or there's heavy rain upstream. <strong>Open</strong> only means the data shows no flooding. The river can rise from normal to road-flooding level in under an hour, so always follow road signs and the police.</p>
   <p><strong>Driver reports and privacy.</strong> When you report a road, we keep the road, your choice, the time and the river readings at that moment, so we can learn when each road really floods. We don't store names, locations or IP addresses. To stop spam we use Cloudflare Turnstile and an anonymous code that changes every day, so reports can't be linked to you over time. Photos have their location and camera details removed, stay hidden until checked or confirmed by another driver, and are deleted after 2 days.</p>
   <p>A free community tool, not an official service. <a href="https://check-for-flooding.service.gov.uk/station/3076" rel="noopener">EA Donyatt river level</a>.</p>
-  <p>This uses Environment Agency flood and river level data from the real-time data API (Beta). Contains public sector information licensed under the Open Government Licence v3.0.</p>
+  <p>This uses Environment Agency flood and river level data from the real-time data API (Beta). Contains public sector information licensed under the Open Government Licence v3.0. Rain forecast by <a href="https://open-meteo.com/" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).</p>
 </footer>
 <dialog id="report-dialog" class="sheet" aria-labelledby="report-title">
   <form method="dialog" class="sheet-head">
