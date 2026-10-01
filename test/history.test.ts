@@ -84,14 +84,14 @@ describe("loadHistory", () => {
 });
 
 describe("/api/history", () => {
-  it("tops up short history once, then serves it with a 5-minute cache", async () => {
+  it("tops up short history once, then serves it with a 1-minute cache", async () => {
     const { d1 } = createTestD1();
     const ea = fakeEa();
     await runCollector(d1, NOW, ea.fn);
     const res = await apiHistory({ DB: d1 } as Env, 7, NOW.getTime(), ea.fn);
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=60");
     const body = await res.json<{ level: [string, number][] }>();
     expect(body.level[0][0] < "2026-09-25").toBe(true);
   });

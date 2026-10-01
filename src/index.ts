@@ -90,7 +90,7 @@ export async function apiHistory(env: Env, days: number, now = Date.now(), fetch
     if (!history.forecastFetchedAt && (await collectForecast(env.DB, new Date(now), fetchFn).catch(() => 0)) > 0) {
       history = await loadHistory(env.DB, days, new Date(now));
     }
-    return json(history, 200, "public, max-age=300");
+    return json(history, 200, "public, max-age=60");
   } catch (err) {
     console.error("History failed:", errorMessage(err));
     return json({ error: "History is unavailable right now." }, 503);
@@ -120,7 +120,7 @@ export default {
           // Self-throttled to hourly (Open-Meteo updates hourly).
           await collectForecast(env.DB).catch((err) => console.error("Forecast failed:", errorMessage(err)));
           // Hourly, top up chart history if it's short (a no-op once 7 days are stored).
-          if (new Date(controller.scheduledTime).getUTCMinutes() < 15) {
+          if (new Date(controller.scheduledTime).getUTCMinutes() < 5) {
             await fillHistory(env.DB).catch((err) => console.error("History top-up failed:", errorMessage(err)));
           }
         } catch (err) {

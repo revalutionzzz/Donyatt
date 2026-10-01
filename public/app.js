@@ -787,7 +787,7 @@
     const charts = [$("level-chart"), $("rain-chart")];
     charts.forEach((c) => c.classList.add("loading"));
     try {
-      const res = await fetch(`/api/history?days=${days}`);
+      const res = await fetch(`/api/history?days=${days}`, { cache: "no-store" });
       const body = await res.json();
       if (!res.ok || !body.level) throw new Error(body.error || "History unavailable");
       history = body;
@@ -1311,7 +1311,34 @@
   loadStatus();
   loadHistory();
   loadPast();
-  setInterval(loadStatus, 2 * 60 * 1000);
-  setInterval(loadHistory, 5 * 60 * 1000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { loadStatus(); loadHistory(); } });
+  // Keep the page current. Status is checked every minute (cheap: it's cached on the server);
+  // the charts reload as soon as the status shows a newer river reading, and every 5 minutes anyway.
+  // Phones pause timers in the background, so also catch up whenever the page comes back.
+  let lastRefresh = Date.now();
+  let lastHistoryLoad = Date.now();
+  async function refresh(force = false) {
+    if (document.hidden && !force) return;
+    lastRefresh = Date.now();
+    await loadStatus();
+    const latest = lastStatus?.river?.readingAt;
+    const charted = history?.level?.at(-1)?.[0];
+    const newReading = latest && charted && parseTime(latest) > parseTime(charted);
+    if (newReading || Date.now() - lastHistoryLoad > 5 * 60 * 1000) {
+      lastHistoryLoad = Date.now();
+      loadHistory();
+    }
+  }
+  setInterval(refresh, 60 * 1000);
+  const catchUp = () => { if (!document.hidden && Date.now() - lastRefresh > 20 * 1000) refresh(); };
+  document.addEventListener("visibilitychange", catchUp);
+  window.addEventListener("focus", catchUp);
+  window.addEventListener("online", catchUp);
+  window.addEventListener("pageshow", (e) => { if (e.persisted) refresh(true); });
+  // Relative times ("5 min ago") tick on their own between refreshes.
+  setInterval(() => {
+    if (document.hidden || !lastStatus) return;
+    const r = lastStatus;
+    $("updated").textContent = `Status worked out ${ago(r.generatedAt)} (${fmtTime(Date.parse(r.generatedAt))}). Refreshes automatically.`;
+    if (r.river.readingAt) $("reading-age").textContent = `Environment Agency reading from ${ago(r.river.readingAt)} (${fmtTime(parseTime(r.river.readingAt))})`;
+  }, 30 * 1000);
 })();

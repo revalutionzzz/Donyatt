@@ -7,7 +7,9 @@ compatibility_date = "2026-09-01"
 workers_dev = true
 
 [triggers]
-crons = ["*/15 * * * *"]
+# Every 5 min: EA readings are 15-min but arrive at irregular times, so checking
+# often gets each one onto the site sooner (the river can flood the road within the hour).
+crons = ["*/5 * * * *"]
 
 [observability]
 enabled = true
