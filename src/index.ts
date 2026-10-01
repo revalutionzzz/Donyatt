@@ -1,6 +1,6 @@
 import { alertSender } from "./alerts";
 import { fillHistory, runCollector } from "./collector";
-import { collectForecast } from "./forecast";
+import { collectForecast, forecastHealth } from "./forecast";
 import { loadHistory } from "./history";
 import { adminReports, apiConfig, getPhoto, postReport, type ReportsEnv } from "./reportsApi";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
@@ -47,12 +47,16 @@ export async function health(env: Env, now = Date.now(), fetchFn: typeof fetch =
 
   const outcome = await runCollectorIfStale(env.DB, now, fetchFn);
   const cronLooksHealthy = outcome.lastRunAgeMs < STALE_RUN_MS;
-  if (!outcome.ran) return json({ ...data, cronLooksHealthy });
+  // Also a backstop for the forecast (self-throttled); the result shows in `forecast`.
+  if (!outcome.ran) await collectForecast(env.DB, new Date(now), fetchFn).catch(() => undefined);
+  const forecast = await forecastHealth(env.DB, new Date(now)).catch((err) => ({ error: errorMessage(err) }));
+  if (!outcome.ran) return json({ ...data, cronLooksHealthy, forecast });
 
   if (env.STATUS) await refreshStatus(env.DB, env.STATUS, new Date(now), alertSender(env, fetchFn)).catch(() => undefined);
   return json({
     ...(await snapshot(env.DB).catch(() => data)),
     cronLooksHealthy,
+    forecast,
     note: "No collector run in the last 20 minutes, so this request ran it.",
     fallbackRun: outcome.error ? { error: outcome.error } : outcome.result,
   });
@@ -81,6 +85,10 @@ export async function apiHistory(env: Env, days: number, now = Date.now(), fetch
       if ((await fillHistory(env.DB, new Date(now), fetchFn).catch(() => 0)) > 0) {
         history = await loadHistory(env.DB, days, new Date(now));
       }
+    }
+    // No fresh forecast (e.g. the cron isn't firing): fetch one now. Self-throttled.
+    if (!history.forecastFetchedAt && (await collectForecast(env.DB, new Date(now), fetchFn).catch(() => 0)) > 0) {
+      history = await loadHistory(env.DB, days, new Date(now));
     }
     return json(history, 200, "public, max-age=300");
   } catch (err) {
