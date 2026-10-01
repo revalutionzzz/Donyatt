@@ -171,6 +171,29 @@
     renderTank(river.levelM);
   }
 
+  function renderOutlook(r) {
+    const o = r.outlook;
+    const panel = $("outlook");
+    const pct = (p) => (p < 0.01 ? "<1%" : `${Math.round(p * 100)}%`);
+    if (!o) {
+      panel.className = "panel outlook b-none";
+      $("outlook-band").textContent = "Unavailable";
+      $("outlook-detail").textContent = "Not enough recent river or rain data to make a prediction.";
+      $("outlook-meter-fill").style.width = "0%";
+      return;
+    }
+    panel.className = `panel outlook b-${o.band}`;
+    $("outlook-band").textContent = { low: "Low", elevated: "Elevated", high: "High" }[o.band];
+    $("outlook-p6").textContent = pct(o.p6h);
+    $("outlook-p3").textContent = pct(o.p3h);
+    $("outlook-meter-fill").style.width = `${Math.max(2, Math.min(100, o.p6h * 100))}%`;
+    $("outlook-meter").setAttribute("aria-valuenow", String(Math.round(o.p6h * 100)));
+    const basis = o.variant === "forecast"
+      ? `Based on the river level, recent rain at Chard and ${o.forecastRain6hMm.toFixed(1)} mm of rain forecast for the next 6 hours.`
+      : "Based on the river level and recent rain at Chard (no fresh rain forecast right now).";
+    $("outlook-detail").textContent = basis;
+  }
+
   function renderStatus(r) {
     lastStatus = r;
     $("advice").textContent = r.advice;
@@ -178,6 +201,7 @@
     renderSummary(r.roads);
     renderRoads(r.roads);
     renderRiver(r.river);
+    renderOutlook(r);
 
     const w = $("warnings");
     if (r.warnings.length) {
@@ -243,8 +267,21 @@
 
   function timeScale(width) {
     const t0 = Date.parse(history.from);
-    const t1 = Date.parse(history.to);
-    return { t0, t1, x: (t) => M.l + ((t - t0) / (t1 - t0)) * (width - M.l - M.r) };
+    const now = Date.parse(history.to);
+    // Extend into the future when there's a rain forecast to show.
+    const fc = history.rainForecast || [];
+    const t1 = fc.length ? Math.max(now, parseTime(fc.at(-1)[0]) + 3_600_000) : now;
+    return { t0, t1, now, x: (t) => M.l + ((t - t0) / (t1 - t0)) * (width - M.l - M.r) };
+  }
+
+  /** "Now" divider and a shaded forecast zone, when the chart extends into the future. */
+  function drawNow(s, x, now, t1, width, top, bottom, label) {
+    if (t1 <= now + 60_000) return;
+    const nx = x(now);
+    s.append(svg("rect", { class: "future", x: nx, y: top, width: width - M.r - nx, height: bottom - top }));
+    s.append(svg("line", { class: "now-line", x1: nx, x2: nx, y1: top - 4, y2: bottom }));
+    // Right-aligned so it never runs off the edge of a narrow chart.
+    if (label) s.append(svg("text", { class: "label", x: width - M.r - 2, y: top + 10, "text-anchor": "end" }, label));
   }
 
   function drawLevelChart() {
@@ -269,6 +306,7 @@
       s.append(svg("text", { class: "ref-text", x: M.l + 6, y: y(v) - 5 }, label));
     }
 
+    drawNow(s, x, Date.parse(history.to), t1, width, top, bottom, "Forecast");
     if (pts.length) {
       // Break the line across gaps longer than an hour.
       const segs = [];
@@ -308,7 +346,8 @@
     const H = 132, top = 20, bottom = 98;
     const { t0, t1, x } = timeScale(width);
     const bars = history.rainHourly.map(([ts, mm]) => [parseTime(ts), mm]);
-    const rawMax = Math.max(2, ...bars.map((b) => b[1]));
+    const fcBars = (history.rainForecast || []).map(([ts, mm]) => [parseTime(ts), mm]);
+    const rawMax = Math.max(2, ...bars.map((b) => b[1]), ...fcBars.map((b) => b[1]));
     const rainStep = niceStep(rawMax, 2);
     const maxV = Math.ceil(rawMax / rainStep) * rainStep;
     const y = (v) => bottom - (v / maxV) * (bottom - top);
@@ -321,20 +360,24 @@
     }
     const slot = x(t0 + 3_600_000) - x(t0);
     const bw = Math.max(1, Math.min(24, slot - 2));
+    const fcTotal = fcBars.reduce((sum, b) => sum + b[1], 0);
+    drawNow(s, x, Date.parse(history.to), t1, width, top, bottom, fcBars.length ? `Forecast ${fcTotal.toFixed(1)} mm` : null);
     const g = svg("g");
-    for (const [t, mm] of bars) {
-      if (mm <= 0) continue;
-      const bx = x(t + 1_800_000) - bw / 2;
-      const by = y(mm);
-      const r = Math.min(4, bw / 2, bottom - by);
-      const d = `M${bx} ${bottom}V${by + r}q0 -${r} ${r} -${r}h${bw - 2 * r}q${r} 0 ${r} ${r}V${bottom}Z`;
-      const bar = svg("path", { class: "bar", d });
-      if (animateCharts) bar.classList.add("grow");
-      g.append(bar);
+    for (const [list, cls] of [[bars, "bar"], [fcBars, "bar bar-forecast"]]) {
+      for (const [t, mm] of list) {
+        if (mm <= 0) continue;
+        const bx = x(t + 1_800_000) - bw / 2;
+        const by = y(mm);
+        const r = Math.min(4, bw / 2, bottom - by);
+        const d = `M${bx} ${bottom}V${by + r}q0 -${r} ${r} -${r}h${bw - 2 * r}q${r} 0 ${r} ${r}V${bottom}Z`;
+        const bar = svg("path", { class: cls, d });
+        if (animateCharts) bar.classList.add("grow");
+        g.append(bar);
+      }
     }
     s.append(g);
-    if (!bars.some((b) => b[1] > 0)) {
-      s.append(svg("text", { class: "label", x: (M.l + width - M.r) / 2, y: (top + bottom) / 2 + 4, "text-anchor": "middle" }, "No rain recorded in this period"));
+    if (!bars.some((b) => b[1] > 0) && !fcBars.some((b) => b[1] > 0)) {
+      s.append(svg("text", { class: "label", x: (M.l + width - M.r) / 2, y: (top + bottom) / 2 + 4, "text-anchor": "middle" }, "No rain recorded or forecast"));
     }
 
     // Shared time axis: day boundaries (midnight UK time) plus a few hour ticks.
@@ -431,6 +474,12 @@
     const head = el("tr");
     head.append(el("th", null, "Time"), el("th", null, "River level"), el("th", null, "Rain that hour"));
     table.append(head);
+    for (const [ts, mm] of [...(history.rainForecast || [])].reverse()) {
+      const t = parseTime(ts);
+      const tr = el("tr");
+      tr.append(el("td", null, `${fmtDay(t)} ${fmtTime(t)} (forecast)`), el("td", null, "–"), el("td", null, `${mm.toFixed(1)} mm forecast`));
+      table.append(tr);
+    }
     // One row per hour (the reading on the hour), newest first.
     const rows = history.level.filter(([ts]) => ts.slice(14, 16) === "00").reverse();
     for (const [ts, v] of rows) {

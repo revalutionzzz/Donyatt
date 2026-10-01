@@ -1,5 +1,6 @@
 import { alertSender } from "./alerts";
 import { fillHistory, runCollector } from "./collector";
+import { collectForecast } from "./forecast";
 import { loadHistory } from "./history";
 import { adminReports, apiConfig, getPhoto, postReport, type ReportsEnv } from "./reportsApi";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "./config";
@@ -108,6 +109,8 @@ export default {
       (async () => {
         try {
           console.log("Collector run", JSON.stringify(await runCollector(env.DB)));
+          // Self-throttled to hourly (Open-Meteo updates hourly).
+          await collectForecast(env.DB).catch((err) => console.error("Forecast failed:", errorMessage(err)));
           // Hourly, top up chart history if it's short (a no-op once 7 days are stored).
           if (new Date(controller.scheduledTime).getUTCMinutes() < 15) {
             await fillHistory(env.DB).catch((err) => console.error("History top-up failed:", errorMessage(err)));

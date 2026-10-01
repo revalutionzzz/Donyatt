@@ -20,7 +20,7 @@ The tool combines Environment Agency (EA) river/rain data, a flood-likelihood pr
 - River Isle level at the Donyatt gauge (public page: check-for-flooding.service.gov.uk/station/3076). Confirm the API station reference and measure ID from the API itself. Don't guess.
 - Chard Snowden Hill rain gauge (upstream). Confirm its API measure ID.
 - EA flood warning area `112FWFISL10A` (River Isle, Chard Reservoir to Hambridge).
-- Forecast rainfall: Open-Meteo (free), added in a later stage.
+- Forecast rainfall: Open-Meteo (free, no key), fetched hourly for the Chard gauge location. See Stage 5 below.
 
 ### Confirmed IDs
 
@@ -125,6 +125,25 @@ Notes:
 - **Record:** every attempt goes into `alerts_sent`.
 - **Message text:** HTML-escaped, always ends with "Never drive into floodwater" and the site link, and never says "safe".
 
+## Rain forecast and flood outlook (Stage 5)
+
+- **Forecast** (`src/forecast.ts`):
+  - Open-Meteo `/v1/forecast` for the Chard Snowdon Hill gauge location: `hourly=precipitation`, `timezone=GMT`, 24 h. Each value is the rain in the hour ending at that time.
+  - Fetched from the cron, and the request backstop, at most hourly (self-throttled via D1).
+  - Every fetch is kept in `rain_forecasts`, so forecasts can be scored against the gauge later.
+  - Unverified against a live response: the sandbox can't reach Open-Meteo, so the test fixture is synthetic, shaped from the docs.
+- **Model** (`model/train.py`, exported to `src/model/flood-model.json`, evaluated by `src/predict.ts`):
+  - Logistic regression for P(Donyatt ≥ 1.80 m within 3 h / 6 h), hourly samples below 1.80 m.
+  - Features: level, rise over 1 h / 3 h, log1p of Chard rain over 1/3/6/24/72 h, and (forecast variant) log1p of forecast rain over the next 6 h.
+  - Trained 2017–2022, tested 2023–2026; see `model/reports/model_card.md`. On 11 unseen test floods the 10% threshold flagged all of them, with median notice about 2.5 h (vs 1.5 h for the rules) and about 7 false-alarm days a year.
+  - The forecast variant was trained with the rain that actually fell (a perfect-forecast upper bound).
+- **Live use:**
+  - Features are taken as of the latest time *both* feeds have reported (rain often lags the river by a reading). There's no outlook if rain lags by more than 60 min, any rain window is under 95% complete, or the river data is stale. Missing rain would understate the risk.
+  - The forecast variant is used when a forecast under 3 h old covers the next 6 h; otherwise the nowcast.
+  - p6h is max(p6h, p3h), because the models are fitted separately.
+- **Effect on status:** an Elevated (≥ 10%) or High (≥ 40%) 6 h outlook adds a Caution reason to every road. The model never lowers a status and never sets Avoid.
+- **Retraining:** run `pip install -r model/requirements.txt`, then `python3 model/backfill.py`, then `python3 model/train.py`. This regenerates the JSON, the model card and `test/fixtures/model-parity.json`, and the parity test checks the TypeScript matches. If the test-period results change, update the "How the outlook works" text in `public/index.html`.
+
 ## Product rules (non-negotiable)
 
 - Never describe a road as "safe". Use Open / Caution / Avoid and "never drive into floodwater" messaging.
@@ -165,10 +184,10 @@ Notes:
 - `public/`: the static site.
   - `index.html`, `styles.css` and `app.js`: plain JS with no dependencies, rendering SVG charts by hand. Chart colours are level = blue, rain = aqua, checked with the dataviz palette validator. Status colours are reserved for Open/Caution/Avoid and always shown with an icon and label. Animations are off under `prefers-reduced-motion`.
   - `data/flood-history.json`: annual peaks and every ≥ 1.80 m event, regenerated with `python3 model/analyse_events.py --json public/data/flood-history.json`.
-- Endpoints: `/api/config` (whether reports and photos are on, plus the Turnstile site key), `POST /api/reports` (JSON, or multipart with `photo`), `/api/photos/:id` (visible photos only), `/admin.html` with `/api/admin/reports` (moderation), `/` (page), `/api/status` (JSON, cached 60 s), `/api/history?days=1|2|7` (level and hourly rain for the charts, cached 5 min; tops up missing days from the EA once), `/health` (collector diagnostics). The cron also tops up history hourly via `fillHistory`, a no-op once 7 days are stored.
+- Endpoints: `/api/config` (whether reports and photos are on, plus the Turnstile site key), `POST /api/reports` (JSON, or multipart with `photo`), `/api/photos/:id` (visible photos only), `/admin.html` with `/api/admin/reports` (moderation), `/` (page), `/api/status` (JSON, cached 60 s), `/api/history?days=1|2|7` (level, hourly rain and the next 12 h of forecast rain for the charts, cached 5 min; tops up missing days from the EA once), `/health` (collector diagnostics). The cron also tops up history hourly via `fillHistory`, a no-op once 7 days are stored.
 - `migrations/`: D1 schema (applied on deploy by `npm run deploy`).
 - `test/`: Vitest tests. `fixtures/` holds real saved EA responses; files named `*synthetic*` are invented data in the EA shape. `d1-sqlite.ts` is a small D1 stand-in on Node's built-in SQLite. (`@cloudflare/vitest-pool-workers` currently fails to install with npm 10.)
-- `model/`: Python. `backfill.py` downloads history into `model/data/` (git-ignored). `analyse_events.py` (needs `pip install -r model/requirements.txt`) regenerates `model/reports/flood_events.md`, the evidence behind the thresholds in `src/rules.ts`.
+- `model/`: Python. `train.py` trains the flood-outlook model (see Stage 5 above). `backfill.py` downloads history into `model/data/` (git-ignored). `analyse_events.py` (needs `pip install -r model/requirements.txt`) regenerates `model/reports/flood_events.md`, the evidence behind the thresholds in `src/rules.ts`.
 - `npm test`, `npm run typecheck`, `npm run dev` (then `curl "localhost:8787/__scheduled?cron=*/15+*+*+*+*"` to trigger the collector and `curl localhost:8787/health` to see the results). Run `npm run db:migrate:local` once first.
 - `cd model && python3 -m unittest test_backfill`
 

@@ -21,3 +21,10 @@ export const PLAUSIBLE_LEVEL_M = { min: -0.5, max: 4 };
 
 /** Public address of the site, used in alert messages. */
 export const SITE_URL = "https://donyatt.n2hfwbmyn9.workers.dev/";
+
+/**
+ * Open-Meteo forecast point: the Chard Snowdon Hill rain gauge (EA station 52129, ST310089).
+ * Open-Meteo's `precipitation` is the total for the preceding hour; times are requested in GMT.
+ */
+export const FORECAST_POINT = { latitude: 50.8759, longitude: -2.9814 };
+export const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";

@@ -1,4 +1,6 @@
 import { WATCHED_FLOOD_AREAS } from "./config";
+import { forecastTotal, type StoredForecast } from "./forecast";
+import { predictOutlook, type Outlook } from "./predict";
 import { describeReports, summariseReports, type DriverReport, type ReportSummary } from "./reports";
 import {
   EA_SEVERITY,
@@ -42,6 +44,8 @@ export interface StatusInputs {
   warningsCheckedAt: string | null;
   /** Recent driver reports (moderated-out ones excluded). */
   reports?: DriverReport[];
+  /** Latest Open-Meteo rain forecast for Chard, if any. */
+  forecast?: StoredForecast | null;
 }
 
 export interface RoadReport {
@@ -65,6 +69,10 @@ export interface StatusReport {
     trend: "rising" | "falling" | "steady" | null;
   };
   rain: { last3hMm: number | null; last12hMm: number | null; latestAt: string | null };
+  /** Forecast rain at Chard from Open-Meteo. */
+  forecast: { next6hMm: number; next12hMm: number; fetchedAt: string } | null;
+  /** Model's chance of Donyatt reaching road-flooding level (null when inputs are incomplete). */
+  outlook: Outlook | null;
   warnings: ActiveWarning[];
   warningsCheckedAt: string | null;
   dataProblems: string[];
@@ -144,6 +152,14 @@ export function computeStatus(input: StatusInputs): StatusReport {
   const rain3h = rainFresh ? rainSince(input.rain, now, 3) : null;
   const rain12h = rainFresh ? rainSince(input.rain, now, 12) : null;
 
+  const outlook = levelFresh ? predictOutlook(input.levels, input.rain, input.forecast ?? null, now) : null;
+  const pct = (p: number) => (p < 0.01 ? "under 1%" : `${Math.round(p * 100)}%`);
+  const outlookReason =
+    outlook && outlook.band !== "low"
+      ? `Flood outlook: ${pct(outlook.p6h)} chance the river at Donyatt reaches road-flooding level (1.80 m) within 6 h` +
+        (outlook.forecastRain6hMm !== null ? `, with ${outlook.forecastRain6hMm.toFixed(1)} mm of rain forecast.` : ".")
+      : null;
+
   const roads = ROADS.map((road) => roadStatus(road));
 
   function roadStatus(road: Road): RoadReport {
@@ -193,6 +209,8 @@ export function computeStatus(input: StatusInputs): StatusReport {
       caution.push(`Heavy rain upstream at Chard: ${rain12h.toFixed(1)} mm in the last 12 h.`);
     }
     if (!warningsFresh) caution.push("EA flood warnings couldn't be checked recently.");
+    // The model can only raise a road to Caution: never lower a status, never set Avoid on its own.
+    if (outlookReason) caution.push(outlookReason);
 
     // Driver reports can only make the status stricter, never looser.
     const reports = summariseReports(input.reports ?? [], road.id, now);
@@ -237,6 +255,14 @@ export function computeStatus(input: StatusInputs): StatusReport {
       last12hMm: rain12h === null ? null : Math.round(rain12h * 10) / 10,
       latestAt: latestRain?.ts ?? null,
     },
+    forecast: input.forecast && input.forecast.hours.length
+      ? {
+          next6hMm: Math.round(forecastTotal(input.forecast.hours, now, 6) * 10) / 10,
+          next12hMm: Math.round(forecastTotal(input.forecast.hours, now, 12) * 10) / 10,
+          fetchedAt: input.forecast.fetchedAt,
+        }
+      : null,
+    outlook,
     warnings: inForce,
     warningsCheckedAt: input.warningsCheckedAt,
     dataProblems,
