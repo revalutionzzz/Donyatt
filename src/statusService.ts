@@ -7,7 +7,8 @@ import { PHOTOS, REPORTS } from "./rules";
 import { logStatus } from "./statusLog";
 import { computeStatus, type ActiveWarning, type StatusInputs, type StatusReport, type TimedValue } from "./status";
 
-export const STATUS_KV_KEY = "status:v1";
+/** Bump when the report shape or road list changes, so an old cached report is never served. */
+export const STATUS_KV_KEY = "status:v2";
 /** If the cron hasn't produced a run for this long, requests run the collector themselves. */
 export const STALE_RUN_MS = 20 * 60 * 1000;
 /** At most one request-triggered collector run per isolate per minute. */

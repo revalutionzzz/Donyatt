@@ -118,7 +118,7 @@ describe("photo upload", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
-    const status = JSON.parse((await env.STATUS.get("status:v1"))!);
+    const status = JSON.parse((await env.STATUS.get("status:v2"))!);
     expect(status.roads[0].status).toBe("avoid");
     expect(status.roads[0].reports.recent[0].photoId).toBe(id);
   });

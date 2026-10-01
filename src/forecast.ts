@@ -4,6 +4,8 @@ export interface ForecastHour {
   /** End of the forecast hour, ISO UTC ("...:00:00Z"). */
   hourEnd: string;
   mm: number;
+  /** Chance of more than 0.1 mm in the hour, 0-100, when Open-Meteo gives it. */
+  probability?: number | null;
 }
 
 export const FORECAST_HOURS = 24;
@@ -16,19 +18,23 @@ export function forecastUrl(): string {
   const q = new URLSearchParams({
     latitude: String(FORECAST_POINT.latitude),
     longitude: String(FORECAST_POINT.longitude),
-    hourly: "precipitation",
+    hourly: "precipitation,precipitation_probability",
     forecast_hours: String(FORECAST_HOURS),
     timezone: "GMT",
   });
   return `${OPEN_METEO_URL}?${q}`;
 }
 
-/** Parse Open-Meteo's `{hourly: {time: [...], precipitation: [...]}}`, skipping nulls. */
+/**
+ * Parse Open-Meteo's `{hourly: {time: [...], precipitation: [...], precipitation_probability: [...]}}`,
+ * skipping hours with no amount. The probability is optional.
+ */
 export function parseForecast(body: unknown): ForecastHour[] {
-  const hourly = (body as { hourly?: { time?: unknown; precipitation?: unknown } })?.hourly;
+  const hourly = (body as { hourly?: { time?: unknown; precipitation?: unknown; precipitation_probability?: unknown } })?.hourly;
   if (!Array.isArray(hourly?.time) || !Array.isArray(hourly?.precipitation) || hourly.time.length !== hourly.precipitation.length) {
     throw new Error("Open-Meteo response has no hourly precipitation");
   }
+  const probs = Array.isArray(hourly.precipitation_probability) ? (hourly.precipitation_probability as unknown[]) : [];
   const out: ForecastHour[] = [];
   hourly.time.forEach((t: unknown, i: number) => {
     const mm = (hourly.precipitation as unknown[])[i];
@@ -36,7 +42,9 @@ export function parseForecast(body: unknown): ForecastHour[] {
     // "2026-10-01T13:00" in GMT -> "2026-10-01T13:00:00Z"
     const iso = /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(t) ? `${t}:00Z` : t;
     if (Number.isNaN(Date.parse(iso))) return;
-    out.push({ hourEnd: iso, mm });
+    const p = probs[i];
+    const probability = typeof p === "number" && Number.isFinite(p) ? Math.max(0, Math.min(100, Math.round(p))) : null;
+    out.push({ hourEnd: iso, mm, probability });
   });
   return out;
 }
@@ -78,8 +86,8 @@ export async function collectForecast(db: D1Database, now = new Date(), fetchFn:
     const hours = parseForecast(await res.json());
     if (!hours.length) throw new Error("Open-Meteo returned no forecast hours");
     const fetchedAt = now.toISOString();
-    const stmt = db.prepare("INSERT OR IGNORE INTO rain_forecasts (fetched_at, hour_end, mm) VALUES (?, ?, ?)");
-    await db.batch(hours.map((h) => stmt.bind(fetchedAt, h.hourEnd, h.mm)));
+    const stmt = db.prepare("INSERT OR IGNORE INTO rain_forecasts (fetched_at, hour_end, mm, probability) VALUES (?, ?, ?, ?)");
+    await db.batch(hours.map((h) => stmt.bind(fetchedAt, h.hourEnd, h.mm, h.probability ?? null)));
     await log(true, hours.length, null);
     return hours.length;
   } catch (err) {
@@ -126,7 +134,7 @@ export async function latestForecast(db: D1Database, now: Date): Promise<StoredF
   const last = await db.prepare("SELECT MAX(fetched_at) AS at FROM rain_forecasts").first<{ at: string | null }>();
   if (!last?.at) return null;
   const { results } = await db
-    .prepare("SELECT hour_end AS hourEnd, mm FROM rain_forecasts WHERE fetched_at = ? AND hour_end > ? ORDER BY hour_end")
+    .prepare("SELECT hour_end AS hourEnd, mm, probability FROM rain_forecasts WHERE fetched_at = ? AND hour_end > ? ORDER BY hour_end")
     .bind(last.at, new Date(now.getTime() - 2 * 3_600_000).toISOString())
     .all<ForecastHour>();
   return { fetchedAt: last.at, hours: results };

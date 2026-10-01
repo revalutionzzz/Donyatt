@@ -9,8 +9,8 @@ export interface History {
   level: [string, number][];
   /** Snowdon Hill rain summed per hour, [hour start, mm], oldest first. */
   rainHourly: [string, number][];
-  /** Open-Meteo forecast for Chard, next 12 h, [hour start, mm]; empty if there's no fresh forecast. */
-  rainForecast: [string, number][];
+  /** Open-Meteo forecast for Chard, next 12 h, [hour start, mm, % chance of rain or null]; empty if there's no fresh forecast. */
+  rainForecast: [string, number, number | null][];
   forecastFetchedAt: string | null;
 }
 
@@ -44,7 +44,7 @@ export async function loadHistory(db: D1Database, days: number, now = new Date()
     rainForecast: fresh
       ? forecast.hours
           .filter((h) => Date.parse(h.hourEnd) > now.getTime() && Date.parse(h.hourEnd) - 3_600_000 < horizon)
-          .map((h) => [new Date(Date.parse(h.hourEnd) - 3_600_000).toISOString().replace(".000Z", "Z"), h.mm])
+          .map((h) => [new Date(Date.parse(h.hourEnd) - 3_600_000).toISOString().replace(".000Z", "Z"), h.mm, h.probability ?? null])
       : [],
     forecastFetchedAt: fresh ? forecast.fetchedAt : null,
   };

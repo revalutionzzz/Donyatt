@@ -121,11 +121,13 @@ Notes:
 - **State:** the last announced status per road is kept in KV (`alerts:state:v1`). A failed send leaves it unchanged, so the next refresh retries.
 - **Record:** every attempt goes into `alerts_sent`.
 - **Message text:** HTML-escaped, always ends with "Never drive into floodwater" and the site link, and never says "safe".
+- **On the page:** the "Stay up to date" panel links the channel. `/api/config` gives `telegramUrl`, derived from `TELEGRAM_CHAT_ID` only when it is a public `@username` (a numeric private chat ID is never exposed), or from an optional `TELEGRAM_CHANNEL_URL` `[vars]` entry (`https://t.me/...` only). With neither, the Telegram block is hidden.
 
 ## Rain forecast and flood outlook (Stage 5)
 
 - **Forecast** (`src/forecast.ts`):
-  - Open-Meteo `/v1/forecast` for the Chard Snowdon Hill gauge location: `hourly=precipitation`, `timezone=GMT`, 24 h. Each value is the rain in the hour ending at that time.
+  - Open-Meteo `/v1/forecast` for the Chard Snowdon Hill gauge location: `hourly=precipitation,precipitation_probability`, `timezone=GMT`, 24 h. Each value is the rain in the hour ending at that time, plus the % chance of more than 0.1 mm (`rain_forecasts.probability`, migration 0007; null for older fetches).
+  - Amounts come in 0.1 mm steps, so a dry spell is all zeros. The page shows the chance of rain alongside, which is what weather apps usually show.
   - Fetched at most hourly (self-throttled via D1) from the cron, the collector backstop, `/health` and `/api/history` (when there's no fresh forecast), so the chart doesn't depend on the cron. After a failure it retries at most every 10 min.
   - Every attempt is logged in `forecast_attempts`, and `/health` shows `forecast` (latest fetch, age, last attempt and Open-Meteo's error reason).
   - Every fetch is kept in `rain_forecasts`, so forecasts can be scored against the gauge later.
@@ -181,10 +183,11 @@ Notes:
 
 - `src/`: the Worker.
   - `collector.ts` is the 15-minute cron job, `ea.ts` the EA API client and `config.ts` the EA IDs.
-  - `rules.ts` holds the status thresholds and the road list, `status.ts` the pure Open/Caution/Avoid/Unknown logic, and `statusService.ts` loads from D1, caches in KV (`status:v1`) and runs the collector itself when the cron hasn't run for 20 minutes.
+  - `rules.ts` holds the status thresholds and the road list, `status.ts` the pure Open/Caution/Avoid/Unknown logic, and `statusService.ts` loads from D1, caches in KV (`status:v2`; bump the key when the report shape or road list changes) and runs the collector itself when the cron hasn't run for 20 minutes.
 - `public/`: the static site.
   - `index.html`, `styles.css` and `app.js`: plain JS with no dependencies, rendering SVG charts by hand. Chart colours are level = blue, rain = aqua, checked with the dataviz palette validator. Status colours are reserved for Open/Caution/Avoid and always shown with an icon and label. Animations are off under `prefers-reduced-motion`.
   - Motion: the river gauge (`renderTank` in `app.js`) is a small simulation. A spring eases the water level and a damped oscillator makes the surface slosh, with two travelling ripples on top. It gets kicked by level changes and taps, and shows bubbles while rising. On phones it uses the motion sensors: `deviceorientation` sets the resting tilt so the surface stays level with the world (adjusted for screen rotation, capped at 35°), and `devicemotion` shakes push the slosh. iOS needs `DeviceOrientationEvent.requestPermission()`, which is only ever called from a tap on the gauge; Android needs no prompt. Sensors are ignored under reduced motion. It runs on `requestAnimationFrame` only while on screen and the tab is visible, and draws one still frame under reduced motion. Road cards update in place, so status colours can transition. Panels reveal on scroll via a position check, not IntersectionObserver alone, so a fast scroll can't leave one hidden.
+  - Installable web app: `manifest.webmanifest`, icons in `icons/` (rendered from `icons/icon.svg`), and `sw.js`. The service worker never caches the status or any data. It only caches `offline.html`, which says the status can't be shown and repeats "never drive into floodwater". The page uses the browser's install prompt where there is one (Android, desktop Chrome/Edge) and shows Share → Add to Home Screen steps on iOS. A banner offers it after 15 s, and dismissing it hides it for 30 days (`localStorage`). Never shown when already installed.
   - `data/flood-history.json`: annual peaks and every ≥ 1.80 m event, regenerated with `python3 model/analyse_events.py --json public/data/flood-history.json`.
 - Endpoints: `/api/config` (whether reports and photos are on, plus the Turnstile site key), `POST /api/reports` (JSON, or multipart with `photo`), `/api/photos/:id` (visible photos only), `/admin.html` with `/api/admin/reports` (moderation), `/` (page), `/api/status` (JSON, cached 60 s), `/api/history?days=1|2|7` (level, hourly rain and the next 12 h of forecast rain for the charts, cached 5 min; tops up missing days from the EA once), `/health` (collector diagnostics). The cron also tops up history hourly via `fillHistory`, a no-op once 7 days are stored.
 - `migrations/`: D1 schema (applied on deploy by `npm run deploy`).

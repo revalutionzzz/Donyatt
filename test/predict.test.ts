@@ -158,7 +158,9 @@ describe("Open-Meteo forecast", () => {
   it("parses hourly precipitation, skipping nulls and marking times as UTC", () => {
     const hours = parseForecast(forecastJson);
     expect(hours).toHaveLength(11);
-    expect(hours[0]).toEqual({ hourEnd: "2026-09-30T21:00:00Z", mm: 0 });
+    expect(hours[0]).toEqual({ hourEnd: "2026-09-30T21:00:00Z", mm: 0, probability: 5 });
+    // The chance of rain is optional (older responses, or hours the model doesn't cover).
+    expect(parseForecast({ hourly: { time: ["2026-10-01T13:00"], precipitation: [0.2] } })).toEqual([{ hourEnd: "2026-10-01T13:00:00Z", mm: 0.2, probability: null }]);
     expect(hours.find((h) => h.hourEnd === "2026-10-01T01:00:00Z")!.mm).toBe(4.6);
     expect(() => parseForecast({ error: true, reason: "bad" })).toThrow();
   });
@@ -177,7 +179,7 @@ describe("Open-Meteo forecast", () => {
     let calls = 0;
     const fetchFn = (async (url: RequestInfo | URL) => {
       calls++;
-      expect(String(url)).toContain("api.open-meteo.com/v1/forecast?latitude=50.8759&longitude=-2.9814&hourly=precipitation");
+      expect(String(url)).toContain("api.open-meteo.com/v1/forecast?latitude=50.8759&longitude=-2.9814&hourly=precipitation%2Cprecipitation_probability");
       return Response.json(forecastJson);
     }) as typeof fetch;
     const t0 = new Date("2026-09-30T22:30:00Z");

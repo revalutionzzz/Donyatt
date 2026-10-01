@@ -7,6 +7,12 @@
 <meta name="description" content="Live River Isle flood status for the A358 south of Donyatt, near Ilminster, Somerset.">
 <meta name="theme-color" content="#0a2f47">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a2f47'/%3E%3Cpath d='M4 19c3-3 5-3 8 0s5 3 8 0 5-3 8 0v9H4z' fill='%235aa7e6'/%3E%3C/svg%3E">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Flood Watch">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -99,6 +105,31 @@
     <p class="meta"><a href="https://check-for-flooding.service.gov.uk/target-area/112FWFISL10A" rel="noopener">EA warning page for the River Isle</a></p>
   </section>
 
+  <section class="panel stay" id="stay" aria-labelledby="stay-h">
+    <h2 id="stay-h">Stay up to date</h2>
+    <div class="stay-grid">
+      <div class="stay-item" id="tg-item" hidden>
+        <div class="stay-icon tg" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M21.4 4.2 2.9 11.4c-1.3.5-1.2 1.2-.2 1.5l4.7 1.5 1.8 5.6c.2.6.4.8.9.8.4 0 .6-.2.9-.4l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.4-1.5zM8.9 13.8l9-5.7c.4-.3.8-.1.5.2l-7.6 6.9-.3 3.3-1.6-4.7z"/></svg></div>
+        <div>
+          <h3>Flood alerts on Telegram</h3>
+          <p>A free channel that messages your phone when the A358 status changes: straight away when it moves to Caution or Avoid, and once it has eased for 30 minutes. Quiet the rest of the time.</p>
+          <p class="meta">Alerts only. To tell us what the road is like, use "Report conditions" above.</p>
+          <a class="btn tg-btn" id="tg-link" href="#" rel="noopener" target="_blank">Join the Telegram channel</a>
+        </div>
+      </div>
+      <div class="stay-item" id="install-item" hidden>
+        <div class="stay-icon" aria-hidden="true"><img src="/icons/icon-192.png" alt="" width="40" height="40"></div>
+        <div>
+          <h3>Add to your home screen</h3>
+          <p>Open Flood Watch like an app, one tap away when the rain starts.</p>
+          <button type="button" class="btn" id="install-btn" hidden>Add to home screen</button>
+          <p class="install-steps" id="install-ios" hidden>On iPhone or iPad, tap <b>Share</b> <svg class="share-ico" viewBox="0 0 24 24" aria-label="Share icon"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 11v9h14v-9"/></svg> at the bottom of Safari, then <b>Add to Home Screen</b>.</p>
+          <p class="install-steps" id="install-other" hidden>In your browser's menu, choose <b>Add to Home screen</b> or <b>Install app</b>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="panel" aria-labelledby="past-h">
     <h2 id="past-h">Past floods at Donyatt</h2>
     <p class="sub">Highest level each year from the EA's records. Bars past the red line are years when roads flooded.</p>
@@ -140,6 +171,12 @@
   <div id="turnstile-box"></div>
   <p id="report-msg" class="report-msg" role="status" aria-live="polite"></p>
 </dialog>
+<div class="install-banner" id="install-banner" role="dialog" aria-labelledby="install-banner-text" hidden>
+  <img src="/icons/icon-192.png" alt="" width="40" height="40">
+  <p id="install-banner-text"><b>Add Flood Watch to your home screen</b><span id="install-banner-sub">Check the A358 in one tap.</span></p>
+  <button type="button" class="btn" id="install-banner-go">Add</button>
+  <button type="button" class="close" id="install-banner-close" aria-label="Not now">×</button>
+</div>
 <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
 <script src="/app.js" defer></script>
 </body>
