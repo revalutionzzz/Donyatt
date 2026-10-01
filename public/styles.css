@@ -227,3 +227,42 @@ footer p { margin: 8px 0; }
 @media (forced-colors: active) {
   .chip { border: 2px solid CanvasText; }
 }
+
+/* ---------- Driver reports ---------- */
+.reports { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; }
+.reports-label { color: var(--muted); font-size: 0.8rem; margin-right: 2px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2); border-radius: 999px; padding: 3px 10px; font-size: 0.82rem; color: var(--ink); }
+.pill-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--st-unknown); }
+.k-clear .pill-dot { background: var(--st-open); }
+.k-care .pill-dot { background: var(--st-caution); }
+.k-do_not_attempt .pill-dot { background: var(--st-avoid); }
+.report-btn {
+  margin-top: 14px; width: 100%; font: inherit; font-weight: 650; font-size: 0.95rem;
+  color: var(--ink); background: var(--surface-2); border: 1px solid var(--ring);
+  border-radius: 10px; padding: 9px 12px; cursor: pointer;
+}
+.report-btn:hover { background: var(--grid); }
+.sheet {
+  width: min(460px, calc(100vw - 24px)); border: 0; border-radius: 18px; padding: 18px;
+  background: var(--surface); color: var(--ink); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.sheet::backdrop { background: rgba(5, 15, 25, 0.55); }
+.sheet[open] { animation: rise 0.25s cubic-bezier(.2, .7, .2, 1); }
+.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0; }
+.sheet h2 { margin: 0; font-size: 1.1rem; }
+.close { font: inherit; font-size: 1.5rem; line-height: 1; background: none; border: 0; color: var(--ink-2); cursor: pointer; padding: 0 4px; }
+.sheet-note { color: var(--ink-2); font-size: 0.9rem; margin: 6px 0 14px; }
+.choices { display: grid; gap: 10px; }
+.choice {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center; text-align: left;
+  font: inherit; font-weight: 700; font-size: 1rem; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--ring); border-radius: 12px; padding: 12px 14px; cursor: pointer;
+}
+.choice small { grid-column: 2; font-weight: 400; color: var(--ink-2); font-size: 0.85rem; }
+.choice .pill-dot { width: 14px; height: 14px; grid-row: span 2; }
+.choice:hover:not(:disabled) { border-color: var(--axis); }
+.choice:disabled { opacity: 0.55; cursor: default; }
+#turnstile-box { margin-top: 12px; min-height: 0; }
+.report-msg { min-height: 1.4em; margin: 10px 0 0; font-weight: 600; }
+.report-msg.ok { color: var(--ink); }
+.report-msg.error { color: var(--st-avoid); }

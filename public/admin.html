@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Reports moderation · Donyatt Flood Watch</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  main { margin-top: 16px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=password] { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--axis); background: var(--surface); color: var(--ink); flex: 1; min-width: 200px; }
+  button.act { font: inherit; font-weight: 650; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--ring); background: var(--surface-2); color: var(--ink); cursor: pointer; }
+  tr.hidden td { opacity: 0.5; text-decoration: line-through; }
+  tr.hidden td:last-child { text-decoration: none; opacity: 1; }
+</style>
+</head>
+<body>
+<header class="hero" style="padding-bottom: 40px"><div class="hero-inner"><h1>Reports moderation</h1><p>Hide junk or mistaken reports. Hidden reports stop counting straight away but are kept for the record.</p></div></header>
+<main>
+  <section class="panel">
+    <form id="login" class="row">
+      <label for="token" class="sr-only">Admin token</label>
+      <input id="token" type="password" autocomplete="current-password" placeholder="Admin token (the ADMIN_TOKEN secret)">
+      <button class="act" type="submit">Load reports</button>
+    </form>
+    <p class="meta" id="msg"></p>
+  </section>
+  <section class="panel">
+    <h2>Last 14 days</h2>
+    <div class="table-wrap" style="max-height:none"><table class="data" id="list"></table></div>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, text) => { const e = document.createElement(tag); if (text != null) e.textContent = text; return e; };
+  const LABELS = { clear: "Clear", care: "Passable with care", do_not_attempt: "Do not attempt" };
+  const ROADS = { "a358-donyatt": "A358", "b3168-ilford-bridges": "B3168", "isle-brewers-fivehead": "Isle Brewers road" };
+  let token = sessionStorage.getItem("dfw-admin") || "";
+
+  async function api(path, method = "GET", body) {
+    const res = await fetch(path, { method, headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    return data;
+  }
+
+  async function load() {
+    try {
+      const { reports } = await api("/api/admin/reports");
+      $("msg").textContent = `${reports.length} reports.`;
+      const table = $("list");
+      const head = el("tr");
+      for (const h of ["When", "Road", "Report", "River", "We showed", "Device", ""]) head.append(el("th", h));
+      table.replaceChildren(head);
+      for (const r of reports) {
+        const tr = el("tr");
+        if (r.hidden) tr.className = "hidden";
+        const when = new Date(r.createdAt).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "short", timeStyle: "short" });
+        tr.append(el("td", when), el("td", ROADS[r.roadId] || r.roadId), el("td", LABELS[r.kind] || r.kind),
+          el("td", r.levelM == null ? "–" : `${r.levelM.toFixed(2)} m`), el("td", r.statusShown || "–"), el("td", r.device));
+        const btn = el("button", r.hidden ? "Unhide" : "Hide");
+        btn.className = "act";
+        btn.addEventListener("click", async () => {
+          const reason = r.hidden ? null : prompt("Reason for hiding (optional)") ?? null;
+          try { await api(`/api/admin/reports/${r.id}/${r.hidden ? "unhide" : "hide"}`, "POST", { reason }); load(); }
+          catch (err) { $("msg").textContent = err.message; }
+        });
+        const td = el("td"); td.append(btn); tr.append(td);
+        table.append(tr);
+      }
+    } catch (err) {
+      $("msg").textContent = err.message;
+    }
+  }
+
+  $("login").addEventListener("submit", (e) => {
+    e.preventDefault();
+    token = $("token").value.trim();
+    sessionStorage.setItem("dfw-admin", token);
+    load();
+  });
+  if (token) load();
+})();
+</script>
+</body>
+</html>

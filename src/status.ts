@@ -1,4 +1,5 @@
 import { WATCHED_FLOOD_AREAS } from "./config";
+import { describeReports, summariseReports, type DriverReport, type ReportSummary } from "./reports";
 import {
   EA_SEVERITY,
   HEAVY_RAIN,
@@ -6,6 +7,7 @@ import {
   LEVEL_STALE_MIN,
   PROJECTED_AVOID,
   RAIN_STALE_MIN,
+  REPORTS,
   RISE_WINDOW_MIN,
   RISING,
   ROADS,
@@ -38,6 +40,8 @@ export interface StatusInputs {
   warnings: ActiveWarning[];
   /** When warnings were last checked successfully (null = never). */
   warningsCheckedAt: string | null;
+  /** Recent driver reports (moderated-out ones excluded). */
+  reports?: DriverReport[];
 }
 
 export interface RoadReport {
@@ -47,6 +51,7 @@ export interface RoadReport {
   status: RoadStatus;
   headline: string;
   reasons: string[];
+  reports: ReportSummary;
 }
 
 export interface StatusReport {
@@ -70,7 +75,7 @@ export const ADVICE =
   "Never drive into floodwater. Just 30 cm of moving water can float a car. If in doubt, turn around.";
 
 const HEADLINES: Record<RoadStatus, string> = {
-  avoid: "Avoid: flooding likely or reported by the EA. Use another route.",
+  avoid: "Avoid: flooding likely or reported. Use another route.",
   caution: "Caution: flooding possible. Be ready to turn around.",
   open: "Open: no flooding indicated by river or EA data.",
   unknown: "Unknown: no recent river data. Check conditions yourself.",
@@ -189,6 +194,13 @@ export function computeStatus(input: StatusInputs): StatusReport {
     }
     if (!warningsFresh) caution.push("EA flood warnings couldn't be checked recently.");
 
+    // Driver reports can only make the status stricter, never looser.
+    const reports = summariseReports(input.reports ?? [], road.id, now);
+    const doNotAttempt = describeReports(reports, "do_not_attempt");
+    if (reports.weights.do_not_attempt >= REPORTS.avoidAtDoNotAttempt) avoid.push(doNotAttempt!);
+    else if (reports.weights.do_not_attempt >= REPORTS.cautionAtDoNotAttempt) caution.push(doNotAttempt!);
+    if (reports.weights.care >= REPORTS.cautionAtCare) caution.push(describeReports(reports, "care")!);
+
     let status: RoadStatus;
     let reasons: string[];
     if (avoid.length) {
@@ -204,7 +216,10 @@ export function computeStatus(input: StatusInputs): StatusReport {
       status = "open";
       reasons = [`The River Isle at Donyatt is at ${m(latest!.value)}, within its normal range.`];
     }
-    return { id: road.id, name: road.name, where: road.where, status, headline: HEADLINES[status], reasons };
+    // "Clear" reports are shown for information only; they never lower the status.
+    const clear = describeReports(reports, "clear");
+    if (clear && (status === "open" || status === "caution")) reasons.push(clear);
+    return { id: road.id, name: road.name, where: road.where, status, headline: HEADLINES[status], reasons, reports };
   }
 
   return {
