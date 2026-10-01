@@ -94,7 +94,7 @@ Notes:
   - Use both to tune per-road thresholds and hold times, and to score past calls. Learning may only **suggest** threshold changes; a human approves them in a PR.
 - Gotcha: a DOM element with `id="turnstile"` shadows `window.turnstile`. The widget container is `#turnstile-box`.
 
-### Report photos (Stage 3b; built, off until the R2 bucket exists)
+### Report photos (Stage 3b; on since 2026-10-01)
 
 - **Switching on:**
   1. Create the R2 bucket `donyatt-photos` with a lifecycle rule deleting objects after 2 days.
@@ -112,7 +112,7 @@ Notes:
 - **Effect on status:** a report with a visible photo weighs ×1.5, so one "Do not attempt" with a checked photo means Avoid.
 - **Cost guard:** 300 photos a day site-wide. After that, reports are still accepted, without photos.
 
-## Telegram alerts (Stage 4; built, off until the bot secrets exist)
+## Telegram alerts (Stage 4; on since 2026-10-01, test alert confirmed)
 
 - **Switching on:** add Worker secrets `TELEGRAM_BOT_TOKEN` (from @BotFather) and `TELEGRAM_CHAT_ID` (e.g. `@channelname` for a public channel with the bot as admin). Check them with "Send test alert" on `/admin.html` (`POST /api/admin/alerts/test`).
 - **Where it runs** (`src/alerts.ts`): `processAlerts` runs inside `refreshStatus` after the status log, so a change from any path (cron, request backstop, report, moderation) is announced straight away. Alert failures never block the status.
@@ -175,6 +175,9 @@ Notes:
 | Worker | `donyatt` (workers.dev only: donyatt.n2hfwbmyn9.workers.dev). The dashboard name wins, so `name` in `wrangler.toml` must match it. | — |
 | D1 | `donyatt-db` | `DB` |
 | KV | `donyatt-status` | `STATUS` |
+| R2 | `donyatt-photos` (lifecycle: delete after 2 days; public access off) | `PHOTOS` |
+| Turnstile | widget `donyatt-reports`, site key in `wrangler.toml` `[vars]` | — |
+| Worker secrets | `TURNSTILE_SECRET_KEY`, `ADMIN_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (set by the owner, 2026-10-01) | — |
 
 ## Repo layout and commands
 
