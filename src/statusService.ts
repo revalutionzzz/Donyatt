@@ -7,8 +7,17 @@ import { PHOTOS, REPORTS } from "./rules";
 import { logStatus } from "./statusLog";
 import { computeStatus, type ActiveWarning, type StatusInputs, type StatusReport, type TimedValue } from "./status";
 
-/** Bump when the report shape or road list changes, so an old cached report is never served. */
-export const STATUS_KV_KEY = "status:v2";
+/**
+ * Key of the cached status in D1 (`status_cache`). Bump it when the report shape or road list
+ * changes, so an old cached report is never served. (Until 2026-10-03 this lived in KV, but a
+ * rewrite every 5 minutes used over half of KV's 1,000 free writes a day.)
+ */
+export const STATUS_CACHE_KEY = "status:v3";
+
+async function readCachedStatus(db: D1Database): Promise<StatusReport | null> {
+  const row = await db.prepare("SELECT report FROM status_cache WHERE key = ?").bind(STATUS_CACHE_KEY).first<{ report: string }>();
+  return row ? (JSON.parse(row.report) as StatusReport) : null;
+}
 /** If the cron hasn't produced a run for this long, requests run the collector themselves. */
 export const STALE_RUN_MS = 20 * 60 * 1000;
 /** At most one request-triggered collector run per isolate per minute. */
@@ -81,7 +90,10 @@ export async function loadStatusInputs(db: D1Database, now: Date): Promise<Statu
 /** Recompute the road status from D1 and cache it in KV. */
 export async function refreshStatus(db: D1Database, kv: KVNamespace, now = new Date(), alerts?: AlertSender): Promise<StatusReport> {
   const report = computeStatus(await loadStatusInputs(db, now));
-  await kv.put(STATUS_KV_KEY, JSON.stringify(report));
+  await db
+    .prepare("INSERT OR REPLACE INTO status_cache (key, generated_at, report) VALUES (?, ?, ?)")
+    .bind(STATUS_CACHE_KEY, report.generatedAt, JSON.stringify(report))
+    .run();
   // History for learning; a logging failure must never block the live status.
   await logStatus(db, report).catch((err) => console.error("Status log failed:", err instanceof Error ? err.message : err));
   // Alerts likewise must never block the status.
@@ -126,7 +138,7 @@ export async function getStatus(
   fetchFn: typeof fetch = fetch,
   alerts?: AlertSender,
 ): Promise<StatusReport> {
-  const cached = await kv.get<StatusReport>(STATUS_KV_KEY, "json");
+  const cached = await readCachedStatus(db);
   if (cached && now - Date.parse(cached.generatedAt) < STALE_RUN_MS) return cached;
   await runCollectorIfStale(db, now, fetchFn);
   return refreshStatus(db, kv, new Date(now), alerts);

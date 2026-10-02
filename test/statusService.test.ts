@@ -6,7 +6,7 @@ import { runCollector } from "../src/collector";
 import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "../src/config";
 import { apiStatus, type Env } from "../src/index";
 import type { StatusReport } from "../src/status";
-import { getStatus, loadStatusInputs, refreshStatus, STATUS_KV_KEY } from "../src/statusService";
+import { getStatus, loadStatusInputs, refreshStatus, STATUS_CACHE_KEY } from "../src/statusService";
 import { createTestD1 } from "./d1-sqlite";
 
 const fixture = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", name), "utf8");
@@ -77,24 +77,40 @@ describe("loadStatusInputs", () => {
 });
 
 describe("status caching", () => {
-  it("refreshStatus stores the report in KV", async () => {
-    const { d1 } = createTestD1();
+  it("refreshStatus stores the report in D1, not KV (KV's free plan allows only 1,000 writes a day)", async () => {
+    const { d1, sqlite } = createTestD1();
     const { kv, store } = fakeKV();
     await runCollector(d1, new Date("2026-09-30T20:05:00Z"), fakeFetch().fn);
     const report = await refreshStatus(d1, kv, NOW);
 
     expect(report.roads.map((r) => r.status)).toEqual(["open"]);
-    expect(JSON.parse(store.get(STATUS_KV_KEY)!)).toEqual(report);
+    const row = sqlite.prepare("SELECT report FROM status_cache WHERE key = ?").get(STATUS_CACHE_KEY) as { report: string };
+    expect(JSON.parse(row.report)).toEqual(report);
+    expect(store.size).toBe(0);
   });
 
-  it("getStatus serves a fresh cached report without touching D1 or the EA", async () => {
-    const { kv, store } = fakeKV();
+  it("refreshes that change nothing don't write to KV", async () => {
+    const { d1 } = createTestD1();
+    const { kv } = fakeKV();
+    let puts = 0;
+    const counting = { get: kv.get.bind(kv), put: async (k: string, v: string) => { puts++; return kv.put(k, v); } } as unknown as KVNamespace;
+    await runCollector(d1, new Date("2026-09-30T20:05:00Z"), fakeFetch().fn);
+    const sender = { token: "t", chatId: "@c", fetchFn: (async () => Response.json({ ok: true })) as unknown as typeof fetch };
+    // 40 minutes of refreshes while nothing changes (before this fix: 2 KV writes every refresh).
+    // (Any longer and the test's EA warnings check goes over an hour old, a real change to Caution.)
+    for (let i = 0; i < 9; i++) await refreshStatus(d1, counting, new Date(NOW.getTime() + i * 5 * 60_000), sender);
+    // Only the first run writes, recording the road and EA alert state.
+    expect(puts).toBe(2);
+  });
+
+  it("getStatus serves a fresh cached report without calling the EA", async () => {
+    const { d1, sqlite } = createTestD1();
+    const { kv } = fakeKV();
     const cached = { generatedAt: NOW.toISOString(), roads: [] } as unknown as StatusReport;
-    store.set(STATUS_KV_KEY, JSON.stringify(cached));
-    const noDb = {} as D1Database; // any D1 call would throw
+    sqlite.prepare("INSERT INTO status_cache (key, generated_at, report) VALUES (?, ?, ?)").run(STATUS_CACHE_KEY, cached.generatedAt, JSON.stringify(cached));
     const f = fakeFetch();
 
-    expect(await getStatus(noDb, kv, NOW.getTime() + 5 * 60_000, f.fn)).toEqual(cached);
+    expect(await getStatus(d1, kv, NOW.getTime() + 5 * 60_000, f.fn)).toEqual(cached);
     expect(f.count()).toBe(0);
   });
 

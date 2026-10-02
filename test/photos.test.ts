@@ -7,6 +7,7 @@ import { DONYATT_LEVEL_MEASURE, SNOWDON_HILL_RAIN_MEASURE } from "../src/config"
 import { JpegError, stripJpegMetadata } from "../src/jpeg";
 import { adminReports, getPhoto, postReport, type ReportsEnv } from "../src/reportsApi";
 import { PHOTOS } from "../src/rules";
+import { STATUS_CACHE_KEY } from "../src/statusService";
 import { createTestD1 } from "./d1-sqlite";
 
 const fixturePath = (name: string) => join(import.meta.dirname, "fixtures", name);
@@ -118,7 +119,7 @@ describe("photo upload", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
-    const status = JSON.parse((await env.STATUS.get("status:v2"))!);
+    const status = JSON.parse((await env.DB.prepare("SELECT report FROM status_cache WHERE key = ?").bind(STATUS_CACHE_KEY).first<{ report: string }>())!.report);
     expect(status.roads[0].status).toBe("avoid");
     expect(status.roads[0].reports.recent[0].photoId).toBe(id);
   });
