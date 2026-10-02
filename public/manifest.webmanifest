@@ -1,6 +1,6 @@
 {
   "name": "Donyatt Flood Watch",
-  "short_name": "Flood Watch",
+  "short_name": "Donyatt Flood Watch",
   "description": "Live flooding status for the A358 south of Donyatt, from the River Isle gauge, EA warnings and driver reports.",
   "id": "/",
   "start_url": "/?source=app",

@@ -73,6 +73,8 @@
     }
     $("summary").textContent = text;
     $("summary-dot").style.background = `var(${STATUS_VAR[worst]})`;
+    // The header tints for Caution and Avoid, so the state registers before anyone reads it.
+    document.querySelector(".hero").dataset.status = worst;
   }
 
   // Road cards are updated in place (not rebuilt), so a status change can fade between colours.
@@ -139,6 +141,7 @@
           extras.push(a);
         }
       }
+      if (!recent.length && config.reportsEnabled) extras.push(el("p", "no-reports", "No driver reports in the last 3 hours."));
       if (config.reportsEnabled) {
         const btn = el("button", "report-btn", "Report conditions");
         btn.type = "button";
@@ -394,6 +397,19 @@
       trend += ` ${river.risePerHourM > 0 ? "+" : ""}${river.risePerHourM.toFixed(2)} m per hour`;
     }
     $("trend").textContent = trend;
+    // When it's high and rising, say when it would reach road-flooding level at this rate.
+    const eta = $("eta");
+    let etaText = "";
+    if (river.levelM != null && river.trend === "rising" && river.risePerHourM > 0 && river.readingAt) {
+      if (river.levelM >= 1.8) {
+        etaText = "Above road-flooding level (1.80 m) and still rising.";
+      } else if (river.levelM >= 1.0) {
+        const hours = (1.8 - river.levelM) / river.risePerHourM;
+        if (hours <= 12) etaText = `At this rate: road-flooding level (1.80 m) around ${fmtTime(parseTime(river.readingAt) + hours * 3_600_000)}. It could be sooner.`;
+      }
+    }
+    eta.textContent = etaText;
+    eta.hidden = !etaText;
     $("reading-age").textContent = river.readingAt ? `Environment Agency reading from ${ago(river.readingAt)} (${fmtTime(parseTime(river.readingAt))})` : "No reading available";
     renderTank(river.levelM, river.trend);
   }
@@ -412,11 +428,16 @@
       $("outlook-band").textContent = "Unavailable";
       $("outlook-detail").textContent = "Not enough recent river or rain data to make a prediction.";
       $("outlook-meter-fill").style.width = "0%";
+      $("outlook-by6").textContent = $("outlook-by3").textContent = "";
       return;
     }
     setBand(panel, o.band);
     $("outlook-band").textContent = { low: "Low", elevated: "Elevated", high: "High" }[o.band];
     $("outlook-p6").textContent = pct(o.p6h);
+    // Clock times for the school run and commute: the windows run from the reading the outlook used.
+    const base = parseTime(o.asOf);
+    $("outlook-by6").textContent = `by ${fmtTime(base + 6 * 3_600_000)}`;
+    $("outlook-by3").textContent = `by ${fmtTime(base + 3 * 3_600_000)}`;
     $("outlook-p3").textContent = pct(o.p3h);
     $("outlook-meter-fill").style.width = `${Math.max(2, Math.min(100, o.p6h * 100))}%`;
     $("outlook-meter").setAttribute("aria-valuenow", String(Math.round(o.p6h * 100)));
@@ -887,7 +908,7 @@
       } else {
         const by = y(v);
         const r = Math.min(4, bw / 2);
-        mark = svg("path", { class: "bar-level", d: `M${bx} ${bottom}V${by + r}q0 -${r} ${r} -${r}h${bw - 2 * r}q${r} 0 ${r} ${r}V${bottom}Z` });
+        mark = svg("path", { class: v >= past.roadFloodM ? "bar-level over" : "bar-level", d: `M${bx} ${bottom}V${by + r}q0 -${r} ${r} -${r}h${bw - 2 * r}q${r} 0 ${r} ${r}V${bottom}Z` });
         if (!pastAnimated && !reducedMotion) {
           mark.classList.add("grow");
           mark.style.animationDelay = `${i * 18}ms`;
@@ -1239,28 +1260,7 @@
     resizeTimer = setTimeout(() => { drawTrend(); if (pastAnimated) drawPast(); }, 150);
   });
 
-  // Panels ease in as they scroll into view (not under reduced motion; never hides content without JS).
-  // Anything at or above the bottom of the viewport is revealed, so a fast fling or a reload
-  // part-way down the page can never leave a panel hidden.
-  if (!reducedMotion) {
-    const pending = new Set(document.querySelectorAll("main .panel"));
-    for (const panel of pending) panel.classList.add("reveal");
-    let queued = false;
-    const check = () => {
-      queued = false;
-      for (const panel of pending) {
-        if (panel.getBoundingClientRect().top < window.innerHeight - 30) {
-          panel.classList.add("in");
-          pending.delete(panel);
-        }
-      }
-      if (!pending.size) window.removeEventListener("scroll", onScroll);
-    };
-    const onScroll = () => { if (!queued) { queued = true; requestAnimationFrame(check); } };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll, { passive: true });
-    requestAnimationFrame(check);
-  }
+  // No scroll fade-in: on a safety tool every panel is fully visible straight away.
 
   // ---------------------------------------------------------------- stay up to date
   // Telegram channel link (from /api/config) and "add to home screen". The browser's own install
