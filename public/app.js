@@ -174,8 +174,9 @@
   // ---- River gauge: water that rises on a spring and sloshes.
   // Scale 0..2.8 m. The surface is redrawn each frame from a damped "slosh" (tilt) plus two
   // travelling ripples; level changes and taps kick the slosh. Runs only while on screen.
-  const TANK = { w: 110, h: 260, top: 10, bottom: 250, max: 2.8, inset: 3 };
-  const tankY = (m) => TANK.bottom - (Math.min(Math.max(m, 0), TANK.max) / TANK.max) * (TANK.bottom - TANK.top);
+  // floor: 0 m sits above the tube's rounded bottom, so a normal low river still shows water.
+  const TANK = { w: 110, h: 260, top: 10, bottom: 250, floor: 26, max: 2.8, inset: 3 };
+  const tankY = (m) => TANK.bottom - TANK.floor - (Math.min(Math.max(m, 0), TANK.max) / TANK.max) * (TANK.bottom - TANK.floor - TANK.top);
   const water = {
     built: false, y: TANK.bottom, vy: 0, target: TANK.bottom, tilt: 0, vtilt: 0, t: 0,
     rising: false, bubbles: [], running: false, onScreen: true, last: 0, nextNudge: 0,
@@ -203,6 +204,11 @@
     water.bubbleLayer = svg("g", { fill: "#fff", "fill-opacity": 0.55 });
     g.append(water.back, water.front, water.bubbleLayer, svg("rect", { x: inset, y: top, width: w - 2 * inset, height: bottom - top, fill: "url(#glass-grad)" }));
     s.append(g, svg("rect", { x: inset, y: top, width: w - 2 * inset, height: bottom - top, rx: 16, fill: "none", stroke: "var(--axis)" }));
+    // Faint scale ticks on the left (1 and 2 m), so the column reads as a measure.
+    for (const m of [1, 2]) {
+      s.append(svg("line", { x1: inset, x2: inset + 10, y1: tankY(m), y2: tankY(m), stroke: "var(--axis)", "stroke-width": 1.5 }));
+      s.append(svg("text", { x: inset + 13, y: tankY(m) + 3.5, "font-size": 9, fill: "var(--muted)", "paint-order": "stroke", stroke: "var(--surface-2)", "stroke-width": 2 }, `${m} m`));
+    }
     for (const [m, cls, label] of [[1.2, "--st-caution", "1.2 m"], [1.8, "--st-avoid", "1.8 m"]]) {
       s.append(svg("line", { x1: inset, x2: w - inset, y1: tankY(m), y2: tankY(m), stroke: `var(${cls})`, "stroke-width": 1.5, "stroke-dasharray": "4 3" }));
       s.append(svg("text", { x: w - 9, y: tankY(m) - 5, "text-anchor": "end", "font-size": 10, "font-weight": 700, fill: "var(--ink-2)", "paint-order": "stroke", stroke: "var(--surface)", "stroke-width": 3 }, label));
@@ -591,7 +597,7 @@
     const chance = maxChance();
     drawNow(s, x, Date.parse(history.to), t1, width, top, bottom,
       fcBars.length ? (fcTotal >= 0.05 ? `Forecast ${fcTotal.toFixed(1)} mm` : "Forecast: dry") : null,
-      chance == null ? null : `Up to ${chance}% chance`);
+      chance == null ? null : `Up to ${chance}% chance of rain`);
     const g = svg("g");
     for (const [list, cls] of [[bars, "bar"], [fcBars, "bar bar-forecast"]]) {
       for (const [t, mm] of list) {
@@ -710,7 +716,7 @@
     for (const [ts, mm, prob] of [...(history.rainForecast || [])].reverse()) {
       const t = parseTime(ts);
       const tr = el("tr");
-      tr.append(el("td", null, `${fmtDay(t)} ${fmtTime(t)} (forecast)`), el("td", null, "–"), el("td", null, `${mm.toFixed(1)} mm forecast${typeof prob === "number" ? ` (${prob}% chance)` : ""}`));
+      tr.append(el("td", null, `${fmtDay(t)} ${fmtTime(t)} (forecast)`), el("td", null, "–"), el("td", null, `${mm.toFixed(1)} mm forecast${mm < 0.05 && typeof prob === "number" ? ` (${prob}% chance of rain)` : ""}`));
       table.append(tr);
     }
     // One row per hour (the reading on the hour), newest first.
@@ -737,9 +743,15 @@
     return total;
   }
 
-  /** Highest forecast chance of rain (%) over the next 12 h, or null if Open-Meteo didn't give one. */
+  /**
+   * Highest forecast chance of rain (%) over the next 12 h, or null. Only used when the forecast
+   * amount is dry: the amount and the chance come from different Open-Meteo models, so showing
+   * "1.4 mm" beside "2% chance" reads as a contradiction.
+   */
   function maxChance() {
-    const probs = (history.rainForecast || []).map((h) => h[2]).filter((p) => typeof p === "number");
+    const fc = history.rainForecast || [];
+    if (fc.some((h) => h[1] >= 0.05)) return null;
+    const probs = fc.map((h) => h[2]).filter((p) => typeof p === "number");
     return probs.length ? Math.max(...probs) : null;
   }
 
@@ -759,7 +771,7 @@
     });
     const chance = maxChance();
     if (chance != null) {
-      const span = el("span", null, "Chance of rain up to ");
+      const span = el("span", null, "Chance of any rain up to ");
       span.append(el("b", null, `${chance}%`));
       parts.push(span);
     }
@@ -774,8 +786,19 @@
     box.replaceChildren(title, ...parts, el("span", "fc-note", note + updated));
   }
 
+  /** Last 24 h low/high under the gauge, from the chart data. */
+  function renderRange() {
+    const fact = $("range-fact");
+    const since = Date.parse(history.to) - 86_400_000;
+    const vals = history.level.filter(([ts]) => parseTime(ts) >= since).map(([, v]) => v);
+    fact.hidden = vals.length < 2;
+    if (fact.hidden) return;
+    fact.replaceChildren(document.createTextNode("Last 24 h "), el("b", null, `${Math.min(...vals).toFixed(2)}–${Math.max(...vals).toFixed(2)} m`));
+  }
+
   function drawTrend() {
     if (!history) return;
+    renderRange();
     drawLevelChart();
     drawRainChart();
     renderForecastSummary();
@@ -900,6 +923,16 @@
     const ri = years.indexOf(record.year);
     s.append(svg("text", { class: "ref-text", x: xc(ri), y: y(record.peakM) - 6, "text-anchor": "middle", "pointer-events": "none" }, `${record.peakM.toFixed(2)} m`));
     host.replaceChildren(s);
+    // Say why the bars start later than the flood count, and name years with no full record.
+    const gaps = years.filter((yr) => !peaks.has(yr));
+    const firstEvent = Number(past.events[0].date.slice(0, 4));
+    const notes = [];
+    if (firstEvent < y0) notes.push(`Bars start in ${y0}, the first full year of the EA's records; the flood count includes floods back to ${firstEvent}.`);
+    if (gaps.length) notes.push(`No full record for ${gaps.join(", ")} (shown as a grey stub).`);
+    let note = $("past-note");
+    if (!note) { note = el("p", "meta"); note.id = "past-note"; host.after(note); }
+    note.textContent = notes.join(" ");
+    note.hidden = !notes.length;
     pastAnimated = true;
   }
 
@@ -1275,15 +1308,29 @@
 
   function hideBanner(remember = true) {
     $("install-banner").hidden = true;
+    document.body.classList.remove("has-banner");
     if (remember) try { localStorage.setItem(BANNER_KEY, String(Date.now())); } catch {}
   }
 
+  // Count visits (once per browser session), so the banner waits for a second visit.
+  let visits = 1;
+  try {
+    if (!sessionStorage.getItem("dfw-session")) {
+      sessionStorage.setItem("dfw-session", "1");
+      localStorage.setItem("dfw-visits", String(Number(localStorage.getItem("dfw-visits") || 0) + 1));
+    }
+    visits = Number(localStorage.getItem("dfw-visits") || 1);
+  } catch {}
+
   function maybeShowBanner() {
-    if (standalone() || bannerDismissedRecently() || !(installPrompt || (isIOS && touch))) return;
+    // Phones only (the panel lower down covers desktops), and not on someone's first visit.
+    if (!touch || visits < 2) return;
+    if (standalone() || bannerDismissedRecently() || !(installPrompt || isIOS)) return;
     if ($("report-dialog").open) return;
     $("install-banner-sub").textContent = installPrompt ? "Check the A358 in one tap." : "Tap Share, then Add to Home Screen.";
     $("install-banner-go").textContent = installPrompt ? "Add" : "How";
     $("install-banner").hidden = false;
+    document.body.classList.add("has-banner");
   }
 
   window.addEventListener("beforeinstallprompt", (e) => {

@@ -51,6 +51,8 @@
 }
 
 * { box-sizing: border-box; }
+/* The hidden attribute always hides, whatever display a class sets (e.g. .photo-preview). */
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -132,7 +134,7 @@ main { max-width: 960px; margin: -36px auto 0; padding: 0 16px 40px; position: r
 .panel h2 { margin: 0; font-size: 1.05rem; }
 .panel .sub { color: var(--muted); font-size: 0.88rem; margin: 2px 0 12px; }
 .grid-2 { display: grid; gap: 16px; grid-template-columns: 1fr; }
-@media (min-width: 760px) { .grid-2 { grid-template-columns: 280px 1fr; } }
+@media (min-width: 760px) { .grid-2 { grid-template-columns: 280px 1fr; align-items: start; } }
 
 /* River gauge (animated water column) */
 .gauge-wrap { display: flex; gap: 16px; align-items: stretch; }
@@ -185,6 +187,8 @@ main { max-width: 960px; margin: -36px auto 0; padding: 0 16px 40px; position: r
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25); animation: banner-in 0.35s ease-out both;
 }
 .install-banner[hidden] { display: none; }
+/* Room below the footer so the banner never covers it. */
+body.has-banner { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .install-banner img { flex: none; border-radius: 10px; }
 .install-banner p { flex: 1; margin: 0; font-size: 0.9rem; line-height: 1.35; }
 .install-banner p b { display: block; }
