@@ -139,8 +139,16 @@ main { max-width: 960px; margin: -36px auto 0; padding: 0 16px 40px; position: r
 .panel { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; margin: 0 0 16px; }
 .panel h2 { margin: 0; font-size: 1.05rem; }
 .panel .sub { color: var(--muted); font-size: 0.88rem; margin: 2px 0 12px; }
-.grid-2 { display: grid; gap: 16px; grid-template-columns: 1fr; }
-@media (min-width: 760px) { .grid-2 { grid-template-columns: 280px 1fr; align-items: start; } }
+.grid-2 { display: grid; gap: 16px; grid-template-columns: 1fr; margin: 0 0 16px; }
+.grid-2 > .panel { margin: 0; }
+/* Desktop: river card and EA warnings stacked on the left, the chart spanning both on the right,
+   so there's no gap under the short river card. Phones keep the order river, chart, warnings. */
+@media (min-width: 760px) {
+  .grid-2 { grid-template-columns: 280px 1fr; grid-template-rows: auto 1fr; grid-template-areas: "river trend" "warn trend"; align-items: start; }
+  .grid-2 > .river { grid-area: river; }
+  .grid-2 > .trend-panel { grid-area: trend; }
+  .grid-2 > .warnings { grid-area: warn; }
+}
 
 /* River gauge (animated water column) */
 .gauge-wrap { display: flex; gap: 16px; align-items: stretch; }

@@ -127,10 +127,12 @@ export async function processAlerts(db: D1Database, kv: KVNamespace, report: Sta
   const since = new Map(results.map((r) => [r.road_id, r]));
 
   const changes: RoadChange[] = [];
+  let dirty = false; // KV writes are limited (1,000 a day on the free plan): only write real changes
   for (const road of report.roads) {
     const last = state[road.id];
     if (!last) {
       state[road.id] = { status: road.status, at: now };
+      dirty = true;
       continue;
     }
     if (last.status === road.status) continue;
@@ -145,7 +147,7 @@ export async function processAlerts(db: D1Database, kv: KVNamespace, report: Sta
     }
   }
   if (!changes.length && !ea.length) {
-    await kv.put(ALERT_STATE_KEY, JSON.stringify(state));
+    if (dirty) await kv.put(ALERT_STATE_KEY, JSON.stringify(state));
     return [];
   }
 
@@ -154,13 +156,14 @@ export async function processAlerts(db: D1Database, kv: KVNamespace, report: Sta
   try {
     await sendTelegram(sender, text);
     for (const c of changes) state[c.roadId] = { status: c.to, at: now };
+    if (changes.length) dirty = true;
     if (ea.length) await kv.put(EA_STATE_KEY, JSON.stringify(eaCurrent));
   } catch (err) {
     // State is left unchanged, so the next refresh tries again.
     error = err instanceof Error ? err.message : String(err);
     console.error("Alert failed:", error);
   }
-  await kv.put(ALERT_STATE_KEY, JSON.stringify(state));
+  if (dirty) await kv.put(ALERT_STATE_KEY, JSON.stringify(state));
   await db
     .prepare("INSERT INTO alerts_sent (at, roads, text, ok, error) VALUES (?, ?, ?, ?, ?)")
     .bind(now, JSON.stringify([...changes.map(({ roadId, from, to }) => ({ roadId, from, to })), ...ea.map(({ floodAreaId, from, to }) => ({ ea: floodAreaId, from, to }))]), text, error ? 0 : 1, error)

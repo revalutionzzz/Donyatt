@@ -8,6 +8,7 @@ import { reportWeight, summariseReports, type DriverReport, type ReportKind } fr
 import { adminReports, apiConfig, dailySalt, LIMITS, postReport, type ReportsEnv } from "../src/reportsApi";
 import { computeStatus, type StatusInputs, type TimedValue } from "../src/status";
 import { logStatus } from "../src/statusLog";
+import { STATUS_CACHE_KEY } from "../src/statusService";
 import { createTestD1 } from "./d1-sqlite";
 
 // ---------------------------------------------------------------- helpers
@@ -56,6 +57,10 @@ function fakeFetch() {
 
 // The saved EA fixtures end at 2026-09-30T20:00Z, so "now" for API tests is just after.
 const API_NOW = new Date("2026-09-30T20:20:00Z");
+
+/** The cached status, as visitors are served it. */
+const statusFromDb = (sqlite: ReturnType<typeof createTestD1>["sqlite"]) =>
+  JSON.parse((sqlite.prepare("SELECT report FROM status_cache WHERE key = ?").get(STATUS_CACHE_KEY) as { report: string }).report);
 
 async function setup(over: Partial<ReportsEnv> = {}) {
   const { d1, sqlite } = createTestD1();
@@ -269,11 +274,11 @@ describe("POST /api/reports", () => {
   });
 
   it("two drivers reporting 'Do not attempt' turns the road to Avoid", async () => {
-    const { env, f, store } = await setup();
+    const { env, f, sqlite } = await setup();
     await postReport(post(good()), env, API_NOW, f.fn);
     const res = await postReport(post(good({ deviceId: "device-bbbb-2222" }), "198.51.100.9"), env, new Date(API_NOW.getTime() + 60_000), f.fn);
     expect((await res.json<{ road: { status: string } }>()).road.status).toBe("avoid");
-    expect(JSON.parse(store.get("status:v2")!).roads[0].status).toBe("avoid");
+    expect(statusFromDb(sqlite).roads[0].status).toBe("avoid");
   });
 });
 
@@ -298,7 +303,7 @@ describe("admin moderation", () => {
   });
 
   it("lists reports and hides junk, which stops it counting", async () => {
-    const { env, f, store } = await setup();
+    const { env, f, sqlite } = await setup();
     await postReport(post(good()), env, API_NOW, f.fn);
     await postReport(post(good({ deviceId: "device-bbbb-2222" }), "198.51.100.9"), env, new Date(API_NOW.getTime() + 60_000), f.fn);
     const list = await (await adminReports(adminReq("/api/admin/reports"), env, "/api/admin/reports", API_NOW)).json<{ reports: { id: number }[] }>();
@@ -306,6 +311,6 @@ describe("admin moderation", () => {
 
     const path = `/api/admin/reports/${list.reports[0].id}/hide`;
     expect((await adminReports(adminReq(path, "POST"), env, path, new Date(API_NOW.getTime() + 2 * 60_000))).status).toBe(200);
-    expect(JSON.parse(store.get("status:v2")!).roads[0].status).toBe("caution");
+    expect(statusFromDb(sqlite).roads[0].status).toBe("caution");
   });
 });
