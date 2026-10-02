@@ -122,6 +122,7 @@ Notes:
   - Easing, and Unknown, go out only after holding for `ALERTS.holdMinutes` (30), so a river hovering at a threshold doesn't spam people.
   - The first run after switch-on records statuses silently.
   - Several roads changing together go out as one message.
+- **EA alerts and warnings** (since 2026-10-02): a flood alert, flood warning or severe flood warning for `112FWFISL10A` or `112WAFTSSR` is announced when issued, upgraded, downgraded or removed, even if the road's status doesn't change. It's combined into the same message as any road change; an EA-only message also lists each road's current status. Last announced EA state is in KV (`alerts:ea:v1`); the first run, and any run before the EA has been checked, records silently.
 - **State:** the last announced status per road is kept in KV (`alerts:state:v1`). A failed send leaves it unchanged, so the next refresh retries.
 - **Record:** every attempt goes into `alerts_sent`.
 - **Message text:** HTML-escaped, always ends with "Never drive into floodwater" and the site link, and never says "safe".
