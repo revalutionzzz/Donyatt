@@ -23,7 +23,7 @@
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Flood Watch">
+<meta name="apple-mobile-web-app-title" content="Donyatt Flood Watch">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="/styles.css">
 </head>
@@ -60,7 +60,7 @@
     <div class="outlook-row">
       <div class="outlook-main">
         <div class="outlook-band" id="outlook-band">–</div>
-        <div class="outlook-figures"><span><b id="outlook-p6">–</b> within 6 hours</span><span><b id="outlook-p3">–</b> within 3 hours</span></div>
+        <div class="outlook-figures"><span><b id="outlook-p6">–</b> within 6 hours <span class="by" id="outlook-by6"></span></span><span><b id="outlook-p3">–</b> within 3 hours <span class="by" id="outlook-by3"></span></span></div>
       </div>
       <div class="meter" id="outlook-meter" role="meter" aria-label="Chance within 6 hours" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
         <div class="meter-fill" id="outlook-meter-fill"></div>
@@ -69,10 +69,7 @@
       <div class="meter-scale"><span>Low</span><span style="left:10%">Elevated</span><span style="left:40%">High</span></div>
     </div>
     <p class="meta" id="outlook-detail"></p>
-    <details class="meta">
-      <summary>How the outlook works</summary>
-      <p>A statistical model trained on the Environment Agency's records for Donyatt and the Chard rain gauge since 2017. It looks at how high the river is, how fast it's changing, how much rain has fallen over the last 3 days and, when available, the rain forecast. Tested on floods from 2023 to 2026 that it never saw during training, it gave warning before all of them, typically about 2½ hours before roads flooded. An Elevated or High outlook puts the A358 on Caution. It can't see everything (blocked drains, other streams), so always follow road signs and never drive into floodwater.</p>
-    </details>
+    <p class="meta"><a href="#how-outlook">How the outlook works</a></p>
   </section>
 
   <div class="grid-2">
@@ -87,6 +84,7 @@
         <div class="reading">
           <div class="figure" id="level-figure">–</div>
           <div class="trend" id="trend"></div>
+          <p class="eta" id="eta" hidden></p>
           <ul class="facts">
             <li>Normal up to <b>1.20 m</b></li>
             <li>Roads have flooded from <b>1.80 m</b></li>
@@ -148,7 +146,7 @@
 
   <section class="panel" aria-labelledby="past-h">
     <h2 id="past-h">Past floods at Donyatt</h2>
-    <p class="sub">Highest level each year from the EA's records. Bars past the red line are years when roads flooded.</p>
+    <p class="sub">Highest level each year from the EA's records. Dark blue bars are years when the river reached road-flooding level (1.80 m).</p>
     <div class="stats" id="past-stats"></div>
     <div class="toolbar"><button type="button" class="linkbtn" id="past-table-toggle" aria-expanded="false" aria-controls="past-table">Show every flood</button></div>
     <div class="chart" id="past-chart"></div>
@@ -156,8 +154,9 @@
   </section>
 </main>
 
-<footer>
+<footer id="how">
   <p><strong>How this works.</strong> The status comes from the Environment Agency's Donyatt river gauge, upstream rainfall at Chard and EA flood warnings. <strong>Avoid</strong> means the river is at or close to the level where the A358 has flooded before (1.80 m), or the EA has a flood warning in force. <strong>Caution</strong> means the river is above normal, rising fast, or there's heavy rain upstream. <strong>Open</strong> only means the data shows no flooding. The river can rise from normal to road-flooding level in under an hour, so always follow road signs and the police.</p>
+  <p id="how-outlook"><strong>The flood outlook.</strong> A statistical model trained on the Environment Agency's records for Donyatt and the Chard rain gauge since 2017. It looks at how high the river is, how fast it's changing, how much rain has fallen over the last 3 days and, when available, the rain forecast. Tested on floods from 2023 to 2026 that it never saw during training, it gave warning before all of them, typically about 2½ hours before roads flooded. An Elevated or High outlook puts the A358 on Caution. It can't see everything (blocked drains, other streams), so always follow road signs and never drive into floodwater.</p>
   <p><strong>Driver reports and privacy.</strong> When you report a road, we keep the road, your choice, the time and the river readings at that moment, so we can learn when each road really floods. We don't store names, locations or IP addresses. To stop spam we use Cloudflare Turnstile and an anonymous code that changes every day, so reports can't be linked to you over time. Photos have their location and camera details removed, are shown with the report, and are deleted after 2 days. Please don't photograph people or number plates.</p>
   <p>A free community tool, not an official service. <a href="https://check-for-flooding.service.gov.uk/station/3076" rel="noopener">EA Donyatt river level</a>.</p>
   <p>This uses Environment Agency flood and river level data from the real-time data API (Beta). Contains public sector information licensed under the Open Government Licence v3.0. Rain forecast by <a href="https://open-meteo.com/" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).</p>
