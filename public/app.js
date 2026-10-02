@@ -643,13 +643,24 @@
     // Shared time axis: day boundaries (midnight UK time) plus a few hour ticks.
     const span = t1 - t0;
     const tickEvery = span <= 86_400_000 * 1.1 ? 6 : span <= 86_400_000 * 2.1 ? 12 : 24;
+    // Narrow charts (7 days on a phone) get short day labels ("Thu 1"), and any label that
+    // would run into the previous one is skipped, so labels never overlap.
+    const dayPx = x(t0 + 86_400_000) - x(t0);
+    const shortDay = (t) => new Date(t).toLocaleDateString("en-GB", { ...tz, weekday: "short", day: "numeric" }).replace(",", "");
+    const dayLabel = dayPx < 80 ? shortDay : fmtDay;
+    const textW = (str) => str.length * 6.2; // 11px label font, roughly
+    let lastRight = -Infinity;
     for (let t = Math.ceil(t0 / 3_600_000) * 3_600_000; t <= t1; t += 3_600_000) {
       const hour = Number(new Date(t).toLocaleString("en-GB", { ...tz, hour: "2-digit", hourCycle: "h23" }));
       if (hour % tickEvery !== 0) continue;
       const tx = x(t);
       if (tx < M.l + 10 || tx > width - M.r - 10) continue;
       s.append(svg("line", { class: "baseline", x1: tx, x2: tx, y1: bottom, y2: bottom + 4 }));
-      s.append(svg("text", { class: "label", x: tx, y: bottom + 17, "text-anchor": "middle" }, hour === 0 ? fmtDay(t) : fmtTime(t)));
+      const label = hour === 0 ? dayLabel(t) : fmtTime(t);
+      const half = textW(label) / 2;
+      if (tx - half < lastRight + 6 || tx + half > width) continue;
+      s.append(svg("text", { class: "label", x: tx, y: bottom + 17, "text-anchor": "middle" }, label));
+      lastRight = tx + half;
     }
     const cross = svg("line", { class: "cross", y1: top, y2: bottom, visibility: "hidden" });
     s.append(cross);
