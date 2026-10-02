@@ -82,6 +82,9 @@ export interface StatusReport {
 export const ADVICE =
   "Never drive into floodwater. Just 30 cm of moving water can float a car. If in doubt, turn around.";
 
+/** "09:00" in UK time. */
+const ukTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+
 const HEADLINES: Record<RoadStatus, string> = {
   avoid: "Avoid: flooding likely or reported. Use another route.",
   caution: "Caution: flooding possible. Be ready to turn around.",
@@ -131,7 +134,9 @@ export function computeStatus(input: StatusInputs): StatusReport {
   if (!levelFresh) {
     dataProblems.push(
       latest
-        ? `The latest Donyatt river reading is ${Math.round(ageMinutes!)} minutes old.`
+        ? // EA readings are sometimes delayed for every gauge at once (seen 2026-10-02: most
+          // gauges in England 90+ min behind). Say plainly that the delay is the EA's.
+          `The Environment Agency hasn't published a new Donyatt river reading since ${ukTime(latest.ts)} (${Math.round(ageMinutes!)} minutes ago). Their data is sometimes delayed; this updates as soon as new readings arrive.`
         : "No Donyatt river readings are available.",
     );
   }

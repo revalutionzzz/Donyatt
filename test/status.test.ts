@@ -107,7 +107,7 @@ describe("computeStatus", () => {
     const stale = series(Array(8).fill(0.25), 120);
     const report = computeStatus(inputs({ levels: stale }));
     expect(new Set(report.roads.map((r) => r.status))).toEqual(new Set(["unknown"]));
-    expect(report.roads[0].reasons[0]).toMatch(/120 minutes old/);
+    expect(report.roads[0].reasons[0]).toMatch(/hasn't published a new Donyatt river reading since \d\d:\d\d \(120 minutes ago\)/);
     expect(computeStatus(inputs({ levels: [] })).roads[0].status).toBe("unknown");
   });
 
