@@ -1207,7 +1207,7 @@
       turnstileWidget = window.turnstile.render("#turnstile-box", {
         sitekey: config.turnstileSiteKey,
         action: "report",
-        callback: (token) => { turnstileToken = token; if (pendingKind) submitReport(pendingKind); },
+        callback: (token) => { turnstileToken = token; if (pendingKind) submitReport(pendingKind, true); },
         "expired-callback": () => { turnstileToken = null; },
         "error-callback": () => setReportMessage("The spam check couldn't run. Please try again.", "error"),
       });
@@ -1216,7 +1216,14 @@
     }
   }
 
-  async function submitReport(kind) {
+  async function submitReport(kind, confirmed = false) {
+    // A warning report while the river is normal would be the only sign of trouble: check it's meant.
+    // (Asked once: a report waiting for the spam check is re-sent with confirmed = true.)
+    const level = lastStatus?.river?.levelM;
+    if (!confirmed && kind !== "clear" && level != null && level < 1.2) {
+      const ok = window.confirm(`The river at Donyatt is in its normal range (${level.toFixed(2)} m), so your report would be the only sign of trouble and will warn other drivers.\n\nOnly send it if you can see water on the A358 right now. Send "${kind === "care" ? "Passable with care" : "Do not attempt"}"?`);
+      if (!ok) return;
+    }
     pendingKind = kind;
     for (const b of document.querySelectorAll(".choice")) b.disabled = true;
     if (!turnstileToken) { setReportMessage("Checking you're human…"); return; }

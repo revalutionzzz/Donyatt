@@ -56,6 +56,12 @@ export interface RoadReport {
   headline: string;
   reasons: string[];
   reports: ReportSummary;
+  /**
+   * The status is stricter than Open only because of a single driver's report: the river, rain
+   * and EA data show nothing, and no second device has reported. Shown on the page, but not
+   * announced on Telegram until confirmed.
+   */
+  unconfirmed?: boolean;
 }
 
 export interface StatusReport {
@@ -217,6 +223,9 @@ export function computeStatus(input: StatusInputs): StatusReport {
     // The model can only raise a road to Caution: never lower a status, never set Avoid on its own.
     if (outlookReason) caution.push(outlookReason);
 
+    // Would the data alone say Open? Then a single driver's report is unconfirmed.
+    const dataSaysOpen = levelFresh && !avoid.length && !caution.length;
+
     // Driver reports can only make the status stricter, never looser.
     const reports = summariseReports(input.reports ?? [], road.id, now);
     const doNotAttempt = describeReports(reports, "do_not_attempt");
@@ -239,10 +248,12 @@ export function computeStatus(input: StatusInputs): StatusReport {
       status = "open";
       reasons = [`The River Isle at Donyatt is at ${m(latest!.value)}, within its normal range.`];
     }
+    const unconfirmed = dataSaysOpen && status !== "open" && reports.warningDevices < 2;
+    if (unconfirmed) reasons.push("Not yet confirmed by the river data or another driver.");
     // "Clear" reports are shown for information only; they never lower the status.
     const clear = describeReports(reports, "clear");
     if (clear && (status === "open" || status === "caution")) reasons.push(clear);
-    return { id: road.id, name: road.name, where: road.where, status, headline: HEADLINES[status], reasons, reports };
+    return { id: road.id, name: road.name, where: road.where, status, headline: HEADLINES[status], reasons, reports, ...(unconfirmed ? { unconfirmed } : {}) };
   }
 
   return {

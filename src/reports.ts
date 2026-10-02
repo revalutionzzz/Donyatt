@@ -18,11 +18,15 @@ export interface DriverReport {
   photoVisible?: boolean;
   /** The photo was approved by the admin. Only then does it add weight to the status. */
   photoApproved?: boolean;
+  /** Daily anonymous device code. Each device counts once (its newest report); never sent to the page. */
+  deviceHash?: string;
 }
 
 export interface ReportSummary {
   /** Weighted totals (0-1 per report, fading with age). */
   weights: Record<ReportKind, number>;
+  /** Different devices behind live "Do not attempt" / "Passable with care" reports. */
+  warningDevices: number;
   /** Reports still carrying weight, newest first, with their age (and photo id if one may be shown). */
   recent: { kind: ReportKind; ageMinutes: number; photoId?: number }[];
 }
@@ -38,18 +42,33 @@ export function reportWeight(ageMinutes: number): number {
 export function summariseReports(reports: DriverReport[], roadId: string, now: Date): ReportSummary {
   const weights: Record<ReportKind, number> = { clear: 0, care: 0, do_not_attempt: 0 };
   const recent: ReportSummary["recent"] = [];
+  // One person, one voice: only each device's newest report counts, so nobody can push the
+  // status alone by reporting twice (the rate limit allows one report per 10 minutes).
+  const newest = new Map<string, DriverReport>();
+  for (const r of reports) {
+    if (r.roadId !== roadId || !r.deviceHash) continue;
+    const prev = newest.get(r.deviceHash);
+    if (!prev || Date.parse(r.createdAt) > Date.parse(prev.createdAt)) newest.set(r.deviceHash, r);
+  }
+  const warningDevices = new Set<string>();
+  let anonymousWarnings = 0;
   for (const r of reports) {
     if (r.roadId !== roadId) continue;
+    if (r.deviceHash && newest.get(r.deviceHash) !== r) continue;
     const ageMinutes = Math.max(0, (now.getTime() - Date.parse(r.createdAt)) / 60_000);
     const w = reportWeight(ageMinutes);
     if (w <= 0) continue;
     weights[r.kind] += w * (r.photoVisible && r.photoApproved ? REPORTS.verifiedPhotoMultiplier : 1);
+    if (r.kind !== "clear") {
+      if (r.deviceHash) warningDevices.add(r.deviceHash);
+      else anonymousWarnings++;
+    }
     const entry: ReportSummary["recent"][number] = { kind: r.kind, ageMinutes: Math.round(ageMinutes) };
     if (r.photoVisible && r.id != null) entry.photoId = r.id;
     recent.push(entry);
   }
   recent.sort((a, b) => a.ageMinutes - b.ageMinutes);
-  return { weights, recent };
+  return { weights, warningDevices: warningDevices.size + anonymousWarnings, recent };
 }
 
 export function describeReports(summary: ReportSummary, kind: ReportKind): string | null {

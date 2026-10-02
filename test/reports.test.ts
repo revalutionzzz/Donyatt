@@ -130,6 +130,27 @@ describe("reports in the road status", () => {
     expect(a358(inputs({ levels: [], reports: [report("do_not_attempt", 1), report("do_not_attempt", 2)] })).status).toBe("avoid");
   });
 
+  it("counts each device once, so one person can't push the road to Avoid alone", () => {
+    const mine = (age: number): DriverReport => ({ ...report("do_not_attempt", age), deviceHash: "aaa" });
+    expect(a358(inputs({ reports: [mine(15), mine(2)] })).status).toBe("caution");
+    const theirs: DriverReport = { ...report("do_not_attempt", 5), deviceHash: "bbb" };
+    expect(a358(inputs({ reports: [mine(15), theirs] })).status).toBe("avoid");
+  });
+
+  it("marks a status that rests on one driver's report as unconfirmed", () => {
+    const one: DriverReport = { ...report("do_not_attempt", 5), deviceHash: "aaa" };
+    const r = a358(inputs({ reports: [one] }));
+    expect(r.status).toBe("caution");
+    expect(r.unconfirmed).toBe(true);
+    expect(r.reasons).toContain("Not yet confirmed by the river data or another driver.");
+    // Backed by the river (above normal), or by a second driver: confirmed.
+    expect(a358(inputs({ levels: series(Array(8).fill(1.3)), reports: [one] })).unconfirmed).toBeUndefined();
+    const two: DriverReport = { ...report("care", 3), deviceHash: "bbb" };
+    expect(a358(inputs({ reports: [one, two] })).unconfirmed).toBeUndefined();
+    // Open roads are never "unconfirmed".
+    expect(a358(inputs()).unconfirmed).toBeUndefined();
+  });
+
   it("ignores reports for roads we no longer cover", () => {
     const old = [report("do_not_attempt", 1, "b3168-ilford-bridges"), report("do_not_attempt", 2, "b3168-ilford-bridges")];
     expect(computeStatus(inputs({ reports: old })).roads.map((r) => r.status)).toEqual(["open"]);

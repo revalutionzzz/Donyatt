@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ALERT_STATE_KEY, alertSender, formatAlert, processAlerts, type AlertSender } from "../src/alerts";
 import { adminReports, type ReportsEnv } from "../src/reportsApi";
+import type { DriverReport } from "../src/reports";
 import { computeStatus, type StatusReport, type TimedValue } from "../src/status";
 import { logStatus } from "../src/statusLog";
 import { createTestD1 } from "./d1-sqlite";
@@ -8,10 +9,10 @@ import { createTestD1 } from "./d1-sqlite";
 const T0 = Date.parse("2026-12-01T12:00:00Z");
 
 /** A status report as computed at T0 + `min`, with the river steady at `level`. */
-function reportAt(min: number, level: number): StatusReport {
+function reportAt(min: number, level: number, reports: DriverReport[] = []): StatusReport {
   const now = new Date(T0 + min * 60_000);
   const levels: TimedValue[] = Array.from({ length: 12 }, (_, i) => ({ ts: new Date(now.getTime() - (20 + (11 - i) * 15) * 60_000).toISOString(), value: level }));
-  return computeStatus({ now, levels, rain: [], warnings: [], warningsCheckedAt: new Date(now.getTime() - 5 * 60_000).toISOString() });
+  return computeStatus({ now, levels, rain: [], warnings: [], warningsCheckedAt: new Date(now.getTime() - 5 * 60_000).toISOString(), reports });
 }
 
 function fakeKV() {
@@ -40,8 +41,8 @@ async function harness(fail = false) {
   const { kv, store } = fakeKV();
   const tg = telegram(fail);
   /** What the app does on each refresh: log the status, then process alerts. */
-  const step = async (min: number, level: number, sender = tg.sender) => {
-    const report = reportAt(min, level);
+  const step = async (min: number, level: number, sender = tg.sender, reports: DriverReport[] = []) => {
+    const report = reportAt(min, level, reports);
     await logStatus(d1, report);
     return processAlerts(d1, kv, report, sender);
   };
@@ -80,6 +81,30 @@ describe("Telegram alerts", () => {
     // No repeat while nothing changes.
     await h.step(30, 1.9);
     expect(h.tg.sent).toHaveLength(1);
+  });
+
+  it("hold back a single unconfirmed driver report, and send once a second driver confirms it", async () => {
+    const h = await harness();
+    const dna = (min: number, device: string): DriverReport => ({ roadId: "a358-donyatt", kind: "do_not_attempt", createdAt: new Date(T0 + min * 60_000).toISOString(), deviceHash: device });
+    await h.step(0, 0.3);
+    // One driver, river normal: Caution on the site, nothing on Telegram.
+    expect(await h.step(15, 0.3, undefined, [dna(14, "aaa")])).toEqual([]);
+    expect(h.tg.sent).toHaveLength(0);
+    // The same driver again doesn't confirm it.
+    expect(await h.step(30, 0.3, undefined, [dna(14, "aaa"), dna(29, "aaa")])).toEqual([]);
+    // A second driver does: announced (two "Do not attempt" from different devices means Avoid).
+    const changes = await h.step(45, 0.3, undefined, [dna(14, "aaa"), dna(29, "aaa"), dna(44, "bbb")]);
+    expect(changes.map((c) => c.to)).toEqual(["avoid"]);
+    expect(h.tg.sent).toHaveLength(1);
+  });
+
+  it("an unconfirmed report that fades away never sends anything", async () => {
+    const h = await harness();
+    const one: DriverReport = { roadId: "a358-donyatt", kind: "do_not_attempt", createdAt: new Date(T0 + 14 * 60_000).toISOString(), deviceHash: "aaa" };
+    await h.step(0, 0.3);
+    await h.step(15, 0.3, undefined, [one]);
+    for (let min = 30; min <= 300; min += 15) await h.step(min, 0.3, undefined, [one]);
+    expect(h.tg.sent).toHaveLength(0);
   });
 
   it("wait 30 minutes before announcing that things have eased", async () => {

@@ -61,7 +61,7 @@ export async function loadStatusInputs(db: D1Database, now: Date): Promise<Statu
   }
   const { results: reports } = await db
     .prepare(
-      `SELECT r.id, r.road_id AS roadId, r.kind, r.created_at AS createdAt,
+      `SELECT r.id, r.road_id AS roadId, r.kind, r.created_at AS createdAt, r.device_hash AS deviceHash,
          ${VISIBLE_PHOTO_SQL} AS photoVisible, r.photo_state = 'approved' AS photoApproved
        FROM reports r
        WHERE r.hidden = 0 AND r.created_at >= ? ORDER BY r.created_at`,

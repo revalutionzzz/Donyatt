@@ -74,6 +74,9 @@ Notes:
   - "Passable with care" weight ≥ 1 means Caution.
   - "Clear" never lowers anything; it's shown as information on Open or Caution roads.
   - Reports only ever make a status stricter.
+  - **One device, one voice** (since 2026-10-02): only each device's newest live report counts (by the daily `device_hash`), so one person can't reach Avoid by reporting twice 10 min apart. Avoid from reports needs two devices (or one admin-approved photo).
+  - **Unconfirmed reports** (since 2026-10-02, owner's request): when the river, rain and EA data alone say Open, a status raised by reports from a single device is marked `unconfirmed` on the road ("Not yet confirmed by the river data or another driver."). It shows on the site but is **not announced on Telegram**: `processAlerts` skips it and leaves the alert state alone, so it's announced once a second device or the data backs it, and clears silently if not.
+  - On the page, "Passable with care" and "Do not attempt" ask "Are you sure?" only when the river is in its normal range (< 1.20 m), where the report would be the only sign of trouble.
 - **`POST /api/reports`** (`src/reportsApi.ts`):
   - Turnstile is verified server-side, with the visitor IP sent to siteverify.
   - Rate limits: 1 per road per device per 10 min, 6 per device per day, 20 per network address per day.
@@ -115,7 +118,7 @@ Notes:
 - **Switching on:** add Worker secrets `TELEGRAM_BOT_TOKEN` (from @BotFather) and `TELEGRAM_CHAT_ID` (e.g. `@channelname` for a public channel with the bot as admin). Check them with "Send test alert" on `/admin.html` (`POST /api/admin/alerts/test`).
 - **Where it runs** (`src/alerts.ts`): `processAlerts` runs inside `refreshStatus` after the status log, so a change from any path (cron, request backstop, report, moderation) is announced straight away. Alert failures never block the status.
 - **When it sends:**
-  - Escalations (to Caution or Avoid) go out at once.
+  - Escalations (to Caution or Avoid) go out at once, except an `unconfirmed` one (a single driver's report with the data showing nothing), which waits for confirmation (see Driver reports).
   - Easing, and Unknown, go out only after holding for `ALERTS.holdMinutes` (30), so a river hovering at a threshold doesn't spam people.
   - The first run after switch-on records statuses silently.
   - Several roads changing together go out as one message.

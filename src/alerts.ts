@@ -88,6 +88,9 @@ export async function processAlerts(db: D1Database, kv: KVNamespace, report: Sta
       continue;
     }
     if (last.status === road.status) continue;
+    // One unconfirmed driver report (the data shows nothing): shown on the site, not announced.
+    // The state stays as it was, so it goes out as soon as it's confirmed, and silently clears if not.
+    if (road.unconfirmed) continue;
     const escalation = road.status !== "unknown" && ESCALATION_RANK[road.status] > ESCALATION_RANK[last.status];
     const began = since.get(road.id);
     const heldFor = began && began.status === road.status ? Date.parse(now) - Date.parse(began.since) : 0;
